@@ -2,6 +2,13 @@ var GAME_WIDTH  = 800;
 var GAME_HEIGHT = 512;
 var TILE_SIZE   = 32;
 
+// Global game state (lives, checkpoint, current level)
+window.GameState = {
+    lives: 3,
+    currentLevel: 'LEVEL_1',
+    checkpoint: null   // { x, y } — set when player reaches a checkpoint
+};
+
 var game = new Phaser.Game({
     type: Phaser.AUTO,
     width:  GAME_WIDTH,
@@ -26,6 +33,7 @@ var game = new Phaser.Game({
         GameScene,
         UIScene,
         MobileScene,
+        InventoryScene,
         StoryScene,
         GameOverScene,
         WinScene

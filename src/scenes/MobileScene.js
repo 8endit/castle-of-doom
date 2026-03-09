@@ -3,7 +3,8 @@ window.VirtualControls = {
     left:              false,
     right:             false,
     jumpJustPressed:   false,
-    attackJustPressed: false
+    attackJustPressed: false,
+    potionJustPressed: false
 };
 
 class MobileScene extends Phaser.Scene {
@@ -19,16 +20,18 @@ class MobileScene extends Phaser.Scene {
         this._makeBtn(R + 16,       H - R - 20, R, '◀', alpha, 'left');
         this._makeBtn(R * 2 + 52,   H - R - 20, R, '▶', alpha, 'right');
 
-        // ── Jump / Attack buttons (bottom-right) ──────────────────────────
+        // ── Jump / Attack / Potion buttons (bottom-right) ─────────────────
+        this._makeBtn(W - R * 3 - 88, H - R - 20, R, '❤', alpha, 'potion', 0x882222);
         this._makeBtn(W - R * 2 - 52, H - R - 20, R, '⬆', alpha, 'jump', 0x2255cc);
-        this._makeBtn(W - R - 16,    H - R - 20, R, 'Z',  alpha, 'attack', 0xcc2222);
+        this._makeBtn(W - R - 16,     H - R - 20, R, 'Z',  alpha, 'attack', 0xcc2222);
 
         // Label hints (tiny text)
         var style = { fontSize: '9px', fill: '#ffffff88' };
-        this.add.text(R + 16,       H - 12, 'LEFT',   style).setOrigin(0.5, 1);
-        this.add.text(R * 2 + 52,   H - 12, 'RIGHT',  style).setOrigin(0.5, 1);
-        this.add.text(W - R*2 - 52, H - 12, 'JUMP',   style).setOrigin(0.5, 1);
-        this.add.text(W - R - 16,   H - 12, 'ATTACK', style).setOrigin(0.5, 1);
+        this.add.text(R + 16,         H - 12, 'LEFT',   style).setOrigin(0.5, 1);
+        this.add.text(R * 2 + 52,     H - 12, 'RIGHT',  style).setOrigin(0.5, 1);
+        this.add.text(W - R*3 - 88,   H - 12, 'POTION', style).setOrigin(0.5, 1);
+        this.add.text(W - R*2 - 52,   H - 12, 'JUMP',   style).setOrigin(0.5, 1);
+        this.add.text(W - R - 16,     H - 12, 'ATTACK', style).setOrigin(0.5, 1);
 
         // Prevent touch events from bubbling to game camera
         this.input.on('pointerdown', (p) => p.event && p.event.stopPropagation && p.event.stopPropagation());
@@ -41,6 +44,7 @@ class MobileScene extends Phaser.Scene {
         //  already read by Player.update this frame)
         window.VirtualControls.jumpJustPressed   = false;
         window.VirtualControls.attackJustPressed = false;
+        window.VirtualControls.potionJustPressed = false;
     }
 
     _makeBtn(x, y, r, label, alpha, action, color) {
@@ -72,9 +76,10 @@ class MobileScene extends Phaser.Scene {
 
     _pressAction(action, isDown) {
         var vc = window.VirtualControls;
-        if (action === 'left')  vc.left   = isDown;
-        if (action === 'right') vc.right  = isDown;
-        if (action === 'jump'  && isDown) vc.jumpJustPressed   = true;
-        if (action === 'attack'&& isDown) vc.attackJustPressed = true;
+        if (action === 'left')   vc.left   = isDown;
+        if (action === 'right')  vc.right  = isDown;
+        if (action === 'jump'   && isDown) vc.jumpJustPressed   = true;
+        if (action === 'attack' && isDown) vc.attackJustPressed = true;
+        if (action === 'potion' && isDown) vc.potionJustPressed = true;
     }
 }

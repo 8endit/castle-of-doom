@@ -35,8 +35,10 @@ class Player extends Phaser.Physics.Arcade.Sprite {
             left: Phaser.Input.Keyboard.KeyCodes.A,
             right: Phaser.Input.Keyboard.KeyCodes.D
         });
-        this.attackKey = scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.Z);
-        this.altAtkKey = scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.X);
+        this.attackKey   = scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.Z);
+        this.altAtkKey   = scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.X);
+        this.inventoryKey = scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.I);
+        this.potionKey    = scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.Q);
 
         // Attack visual
         this.attackSprite = scene.add.sprite(x, y, 'attack_box');
@@ -126,6 +128,18 @@ class Player extends Phaser.Physics.Arcade.Sprite {
             this.startAttack();
         }
 
+        // Open inventory (I key)
+        if (Phaser.Input.Keyboard.JustDown(this.inventoryKey)) {
+            if (!this.scene.scene.isActive('InventoryScene')) {
+                this.scene.scene.launch('InventoryScene');
+            }
+        }
+
+        // Use potion (Q key)
+        if (Phaser.Input.Keyboard.JustDown(this.potionKey) || vc.potionJustPressed) {
+            this._usePotion();
+        }
+
         // Drop through platform (Down + Jump)
         if ((this.cursors.down && this.cursors.down.isDown) && jumpPressed) {
             this.body.setVelocityY(200);
@@ -171,15 +185,67 @@ class Player extends Phaser.Physics.Arcade.Sprite {
         this.active = false;
         this.body.enable = false;
         this.attackSprite.setAlpha(0);
+
+        window.GameState.lives--;
+
         this.scene.tweens.add({
             targets: this,
             alpha: 0,
             y: this.y - 40,
-            duration: 800,
+            duration: 600,
             onComplete: () => {
-                this.scene.scene.start('GameOverScene');
+                if (window.GameState.lives > 0) {
+                    // Show "YOU DIED" briefly then respawn
+                    var cam = this.scene.cameras.main;
+                    var diedText = this.scene.add.text(
+                        cam.scrollX + GAME_WIDTH / 2,
+                        cam.scrollY + GAME_HEIGHT / 2,
+                        'YOU DIED', {
+                            fontSize: '48px', fill: '#ff2222', fontStyle: 'bold',
+                            stroke: '#000000', strokeThickness: 6
+                        }
+                    ).setOrigin(0.5).setDepth(100).setAlpha(0);
+
+                    this.scene.tweens.add({
+                        targets: diedText,
+                        alpha: 1,
+                        duration: 400,
+                        yoyo: true,
+                        hold: 700,
+                        onComplete: () => {
+                            diedText.destroy();
+                            // Notify UIScene of updated lives
+                            this.scene.scene.get('UIScene').events.emit('livesChanged', window.GameState.lives);
+                            // Restart same level (respawn at checkpoint or start)
+                            this.scene.scene.stop('UIScene');
+                            this.scene.scene.stop('MobileScene');
+                            this.scene.scene.start('GameScene', { level: window.GameState.currentLevel });
+                        }
+                    });
+                } else {
+                    this.scene.scene.start('GameOverScene');
+                }
             }
         });
+    }
+
+    _usePotion() {
+        if (!this.potions || this.potions.length === 0) return;
+        var heal = this.potions.shift();
+        this.stats.hp = Math.min(this.stats.maxHp, this.stats.hp + heal);
+        this.scene.events.emit('playerDamaged', this.stats.hp, this.stats.maxHp);
+        this.scene.events.emit('potionsChanged', this.potions.length);
+        // Green healing particles
+        var particles = this.scene.add.particles(this.x, this.y, 'player', {
+            speed: { min: 20, max: 80 },
+            scale: { start: 0.3, end: 0 },
+            tint: 0x00ff88,
+            lifespan: 500,
+            quantity: 10,
+            gravityY: -100
+        });
+        this.scene.time.delayedCall(600, () => { if (particles) particles.destroy(); });
+        this._trySound('sfx_pickup');
     }
 
     recalcStats() {

@@ -6,6 +6,11 @@ class GameScene extends Phaser.Scene {
         this.levelData = window[this.levelKey] || LEVEL_1;
         this.bossDefeated = false;
         this.exitOpen     = false;
+        // Track current level; reset checkpoint when entering a new level
+        if (window.GameState.currentLevel !== this.levelKey) {
+            window.GameState.currentLevel = this.levelKey;
+            window.GameState.checkpoint   = null;
+        }
     }
 
     create() {
@@ -26,8 +31,10 @@ class GameScene extends Phaser.Scene {
         this.physics.world.setBounds(0, 0, W, H + 200);
         this.cameras.main.setBounds(0, 0, W, H);
 
-        // Player
-        this.player = new Player(this, ld.playerStart.x, ld.playerStart.y);
+        // Player — respawn at checkpoint if available
+        var spawnX = (window.GameState.checkpoint ? window.GameState.checkpoint.x : ld.playerStart.x);
+        var spawnY = (window.GameState.checkpoint ? window.GameState.checkpoint.y : ld.playerStart.y);
+        this.player = new Player(this, spawnX, spawnY);
         this.player.inventory = new Inventory(this.player);
         this.cameras.main.startFollow(this.player, true, 0.1, 0.1);
 
@@ -37,7 +44,8 @@ class GameScene extends Phaser.Scene {
         // Loot items group
         this.lootItems = this.physics.add.group();
 
-        // Spawn enemies
+        // Spawn enemies (initially deactivated for proximity spawning)
+        this._inactiveEnemies = [];
         (ld.enemies || []).forEach(cfg => this._spawnEnemy(cfg));
 
         // Spawn boss
@@ -45,6 +53,9 @@ class GameScene extends Phaser.Scene {
         if (ld.boss) {
             this._spawnBoss(ld.boss);
         }
+
+        // Checkpoints
+        this._spawnCheckpoints(ld.checkpoints || []);
 
         // Exit portal (hidden until boss dies or no boss)
         this.exitPortal = this.add.sprite(ld.exitX, ld.playerStart.y - 8, 'exit_portal');
@@ -125,6 +136,17 @@ class GameScene extends Phaser.Scene {
 
         this.player.update(time, delta);
 
+        // Proximity spawning: activate enemies within 550px of player
+        if (this._inactiveEnemies && this._inactiveEnemies.length > 0) {
+            this._inactiveEnemies = this._inactiveEnemies.filter(enemy => {
+                if (!enemy.active && Math.abs(enemy.x - this.player.x) < 550) {
+                    this._activateEnemy(enemy);
+                    return false;  // remove from inactive list
+                }
+                return !enemy.active;
+            });
+        }
+
         // Set player reference on enemies and handle projectile overlaps
         this.enemies.getChildren().forEach(enemy => {
             enemy.player = this.player;
@@ -169,6 +191,52 @@ class GameScene extends Phaser.Scene {
         return player.body.velocity.y >= 0 && player.body.bottom <= plat.body.top + 12;
     }
 
+    _spawnCheckpoints(checkpoints) {
+        this._checkpointZones = [];
+        checkpoints.forEach((cp, index) => {
+            // Skip checkpoints already passed (checkpoint x ≤ current checkpoint x)
+            if (window.GameState.checkpoint && cp.x <= window.GameState.checkpoint.x) return;
+
+            // Visual marker: small campfire-like glyph
+            var marker = this.add.text(cp.x, cp.y - 24, '🔥', {
+                fontSize: '20px'
+            }).setOrigin(0.5).setDepth(3);
+
+            // Pulsing glow
+            this.tweens.add({
+                targets: marker,
+                scaleX: { from: 0.9, to: 1.1 },
+                scaleY: { from: 0.9, to: 1.1 },
+                duration: 800,
+                yoyo: true,
+                repeat: -1
+            });
+
+            // Trigger zone
+            var zone = this.add.zone(cp.x, cp.y, 40, 64).setOrigin(0.5);
+            this.physics.add.existing(zone, true);
+            this.physics.add.overlap(this.player, zone, () => {
+                if (window.GameState.checkpoint && window.GameState.checkpoint.x >= cp.x) return;
+                window.GameState.checkpoint = { x: cp.x, y: cp.y };
+                marker.setText('✨');
+                // Checkpoint flash
+                var flash = this.add.text(cp.x, cp.y - 50, 'CHECKPOINT', {
+                    fontSize: '12px', fill: '#00ffcc',
+                    backgroundColor: '#00000088', padding: { x: 4, y: 2 }
+                }).setOrigin(0.5).setDepth(20);
+                this.tweens.add({
+                    targets: flash,
+                    alpha: 0,
+                    y: flash.y - 30,
+                    duration: 1500,
+                    onComplete: () => { if (flash.active) flash.destroy(); }
+                });
+            });
+
+            this._checkpointZones.push({ zone, marker, cp });
+        });
+    }
+
     _spawnEnemy(cfg) {
         var enemy;
         if (cfg.type === 'patrol') {
@@ -182,7 +250,28 @@ class GameScene extends Phaser.Scene {
         }
         enemy.player  = this.player;
         enemy.onDeath = (x, y, forced) => this._onEnemyDied(x, y, forced);
+        // Start deactivated — activated via proximity in update()
+        enemy.setActive(false).setVisible(false);
+        enemy.body.enable = false;
+        this._inactiveEnemies.push(enemy);
         this.enemies.add(enemy);
+    }
+
+    _activateEnemy(enemy) {
+        enemy.setActive(true).setVisible(true);
+        enemy.body.enable = true;
+        // Pop-in animation: scale 0→1 over 300ms
+        enemy.setScale(0);
+        this.tweens.add({
+            targets: enemy,
+            scaleX: 1,
+            scaleY: 1,
+            duration: 300,
+            ease: 'Back.Out'
+        });
+        // White flash
+        enemy.setTint(0xffffff);
+        this.time.delayedCall(200, () => { if (enemy.active) enemy.clearTint(); });
     }
 
     _spawnBoss(cfg) {
@@ -205,8 +294,13 @@ class GameScene extends Phaser.Scene {
         if (LootSystem.shouldDrop() || forced) {
             var loot = LootSystem.spawn(this, x, y, forced);
             this.lootItems.add(loot);
-            // Loot ↔ tiles collider
             this.physics.add.collider(loot, this.solidLayer);
+        }
+        // Additional potion drop
+        if (LootSystem.shouldDropPotion()) {
+            var potion = LootSystem.spawnPotion(this, x - 20, y);
+            this.lootItems.add(potion);
+            this.physics.add.collider(potion, this.solidLayer);
         }
     }
 
@@ -244,7 +338,21 @@ class GameScene extends Phaser.Scene {
     _pickupLoot(player, lootSprite) {
         if (!lootSprite.active || !lootSprite.itemData) return;
         var item = lootSprite.itemData;
-        var old  = player.inventory.equip(item);
+
+        // Potion: add to player's potion stack (max 2)
+        if (item.type === 'potion') {
+            if (!player.potions) player.potions = [];
+            if (player.potions.length < 2) {
+                player.potions.push(item.healAmount);
+                lootSprite.destroy();
+                this.scene.get('UIScene').events.emit('potionsChanged', player.potions.length);
+                this.scene.get('UIScene').events.emit('itemPickup', '❤ Potion (+' + item.healAmount + ' HP)');
+                try { this.sound.play('sfx_pickup'); } catch (e) {}
+            }
+            return;
+        }
+
+        var old = player.inventory.equip(item);
         lootSprite.destroy();
 
         // Drop old item back if any
@@ -300,8 +408,9 @@ class GameScene extends Phaser.Scene {
 
         // Draw castle towers across the background
         var towerPositions = [0.1, 0.25, 0.45, 0.65, 0.8, 0.95];
+        g.setAlpha(0.5);
         towerPositions.forEach(frac => {
-            var tx = frac * W * 0.2;  // visible range, scroll factor 0.2
+            var tx = frac * W;  // spread across full world width; scroll factor 0.2 gives parallax depth
             var tw = 60;
             var th = 200;
             g.fillRect(tx, H - th - 20, tw, th);

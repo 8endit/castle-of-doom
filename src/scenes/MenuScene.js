@@ -77,6 +77,10 @@ class MenuScene extends Phaser.Scene {
 
         var startGame = () => {
             window._hintShown = false;  // Reset hint for new game
+            // Reset global state for a fresh game
+            window.GameState.lives        = 3;
+            window.GameState.currentLevel = 'LEVEL_1';
+            window.GameState.checkpoint   = null;
             this.scene.start('StoryScene', {
                 lines: LEVEL_1.storyBefore || [],
                 nextScene: 'GameScene',

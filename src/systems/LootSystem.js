@@ -1,4 +1,5 @@
-var ITEM_TYPES = ['weapon', 'helmet', 'body', 'ring'];
+var ITEM_TYPES   = ['weapon', 'helmet', 'body', 'ring'];
+var POTION_HEAL  = [30, 50];   // min/max HP healed
 
 var ITEM_COLORS = {
     weapon: 0xffdd00,
@@ -67,9 +68,42 @@ var LootSystem = {
         return sprite;
     },
 
+    /** Generate a potion item. */
+    generatePotion() {
+        var heal = Phaser.Math.Between(POTION_HEAL[0], POTION_HEAL[1]);
+        return { type: 'potion', rarity: 'common', healAmount: heal };
+    },
+
+    /** Spawn a potion sprite. */
+    spawnPotion(scene, x, y) {
+        var item   = LootSystem.generatePotion();
+        var sprite = scene.physics.add.sprite(x, y - 20, 'loot_ring');  // reuse a sprite, tint red
+        sprite.body.allowGravity = true;
+        sprite.setBounce(0.3);
+        sprite.setCollideWorldBounds(true);
+        sprite.setDepth(3);
+        sprite.setTint(0xff3333);
+        sprite.itemData = item;
+
+        scene.tweens.add({
+            targets: sprite,
+            alpha: { from: 0.6, to: 1 },
+            duration: 500,
+            yoyo: true,
+            repeat: -1
+        });
+
+        return sprite;
+    },
+
     /** Drop chance on enemy death (call from GameScene). */
     shouldDrop() {
         return Math.random() < 0.45;   // 45% chance per enemy
+    },
+
+    /** Potion drop chance (additional to equipment). */
+    shouldDropPotion() {
+        return Math.random() < 0.25;   // 25% chance
     },
 
     /** Human-readable item label for UI. */

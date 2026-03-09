@@ -57,6 +57,28 @@ class UIScene extends Phaser.Scene {
         this.dmgFlash = this.add.rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, 0xff0000, 0)
             .setOrigin(0, 0).setDepth(50);
 
+        // ---- Lives (heart icons) ----
+        this.heartIcons = [];
+        for (var h = 0; h < 3; h++) {
+            var heart = this.add.text(12 + h * 22, GAME_HEIGHT - 28, '♥', {
+                fontSize: '18px', fill: '#ff3333'
+            });
+            this.heartIcons.push(heart);
+        }
+        this._updateLives(window.GameState.lives);
+
+        // ---- Potion quick-slots ----
+        this.potionSlots = [];
+        for (var p = 0; p < 2; p++) {
+            var slotBg = this.add.rectangle(82 + p * 28, GAME_HEIGHT - 20, 24, 24, 0x222222)
+                .setOrigin(0.5).setStrokeStyle(1, 0x553333);
+            var slotIcon = this.add.text(82 + p * 28, GAME_HEIGHT - 20, '❤', {
+                fontSize: '14px', fill: '#441111'
+            }).setOrigin(0.5);
+            this.potionSlots.push({ bg: slotBg, icon: slotIcon });
+        }
+        this.add.text(82, GAME_HEIGHT - 38, '[Q]', { fontSize: '9px', fill: '#886666' }).setOrigin(0.5, 1);
+
         // ---- Listen to game events ----
         this.events.on('playerHP', this._updateHP, this);
         this.events.on('bossSpawned', this._showBossBar, this);
@@ -64,6 +86,8 @@ class UIScene extends Phaser.Scene {
         this.events.on('bossDied', this._hideBossBar, this);
         this.events.on('inventoryChanged', this._updateInventory, this);
         this.events.on('itemPickup', this._showToast, this);
+        this.events.on('livesChanged', this._updateLives, this);
+        this.events.on('potionsChanged', this._updatePotions, this);
 
         // Forward events from GameScene to UIScene
         var gs = this.scene.get('GameScene');
@@ -149,5 +173,27 @@ class UIScene extends Phaser.Scene {
     _showToast(msg) {
         this.toast.setText(msg).setAlpha(1);
         this.toastTimer = 2500;
+    }
+
+    _updateLives(lives) {
+        this.heartIcons.forEach((heart, i) => {
+            if (i < lives) {
+                heart.setStyle({ fill: '#ff3333' }).setAlpha(1);
+            } else {
+                heart.setStyle({ fill: '#441111' }).setAlpha(0.6);
+            }
+        });
+    }
+
+    _updatePotions(count) {
+        this.potionSlots.forEach((slot, i) => {
+            if (i < count) {
+                slot.icon.setStyle({ fill: '#ff4444' });
+                slot.bg.setFillStyle(0x331111);
+            } else {
+                slot.icon.setStyle({ fill: '#441111' });
+                slot.bg.setFillStyle(0x222222);
+            }
+        });
     }
 }
