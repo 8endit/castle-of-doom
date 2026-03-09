@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Castle of Doom</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
+
+  <!-- Level data (loaded first — no dependencies) -->
+  <script src="src/levels/level1.js"></script>
+  <script src="src/levels/level2.js"></script>
+  <script src="src/levels/level3.js"></script>
+
+  <!-- Utilities -->
+  <script src="src/utils/TileMap.js"></script>
+
+  <!-- Entities (depend on Phaser only) -->
+  <script src="src/entities/Player.js"></script>
+  <script src="src/entities/EnemyBase.js"></script>
+  <script src="src/entities/EnemyPatrol.js"></script>
+  <script src="src/entities/EnemyChaser.js"></script>
+  <script src="src/entities/EnemyRanged.js"></script>
+  <script src="src/entities/Boss.js"></script>
+
+  <!-- Systems (depend on Phaser + levels) -->
+  <script src="src/systems/LootSystem.js"></script>
+  <script src="src/systems/Inventory.js"></script>
+  <script src="src/systems/CombatSystem.js"></script>
+
+  <!-- Scenes (depend on everything above) -->
+  <script src="src/scenes/BootScene.js"></script>
+  <script src="src/scenes/MenuScene.js"></script>
+  <script src="src/scenes/UIScene.js"></script>
+  <script src="src/scenes/MobileScene.js"></script>
+  <script src="src/scenes/StoryScene.js"></script>
+  <script src="src/scenes/GameOverScene.js"></script>
+  <script src="src/scenes/WinScene.js"></script>
+  <script src="src/scenes/GameScene.js"></script>
+
+  <!-- Entry point -->
+  <script src="src/main.js"></script>
+</body>
+</html>
