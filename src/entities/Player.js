@@ -17,13 +17,20 @@ class Player extends Phaser.Physics.Arcade.Sprite {
         this.attackTimer         = 0;
         this.attackDuration      = 300;
         this.attackCooldown      = 0;
+        this._attackQueued       = false;
         this.hitEnemiesThisSwing = new Set();
         this.isHurt              = false;
         this.hurtTimer           = 0;
-        this.hurtDuration        = 600;
+        this.hurtDuration        = 900;
         this.invincible          = false;
         this.canDoubleJump       = true;
         this.jumpCount           = 0;
+
+        // Coyote time + jump buffer
+        this._coyoteTimer  = 0;   // counts down after leaving ground
+        this._jumpBuffer   = 0;   // counts down after pressing jump in air
+        this._wasOnGround  = false;
+        this._spikeTimer   = 0;
 
         // Inventory + companion reference (set after creation)
         this.inventory = null;
@@ -40,11 +47,11 @@ class Player extends Phaser.Physics.Arcade.Sprite {
             left: Phaser.Input.Keyboard.KeyCodes.A,
             right: Phaser.Input.Keyboard.KeyCodes.D
         });
-        this.attackKey   = scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.Z);
-        this.altAtkKey   = scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.X);
+        this.attackKey    = scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.Z);
+        this.altAtkKey    = scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.X);
         this.inventoryKey = scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.I);
-        this.potionKey   = scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.Q);
-        this.kiriKey     = scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.H);
+        this.potionKey    = scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.Q);
+        this.kiriKey      = scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.H);
 
         // Attack visual (melee only)
         this.attackSprite = scene.add.sprite(x, y, 'attack_box');
@@ -56,20 +63,39 @@ class Player extends Phaser.Physics.Arcade.Sprite {
         if (!this.active) return;
 
         var onGround = this.body.blocked.down;
-        if (onGround) this.jumpCount = 0;
+
+        // Coyote time: give a grace window after walking off a ledge
+        if (onGround) {
+            this.jumpCount   = 0;
+            this._coyoteTimer = 100;
+            this._wasOnGround = true;
+        } else {
+            if (this._coyoteTimer > 0) this._coyoteTimer -= delta;
+        }
+
+        // Jump buffer: count down even in air
+        if (this._jumpBuffer > 0) this._jumpBuffer -= delta;
+        if (this._spikeTimer  > 0) this._spikeTimer  -= delta;
 
         // Hurt flash
         if (this.isHurt) {
             this.hurtTimer -= delta;
             this.setAlpha(Math.floor(this.hurtTimer / 80) % 2 === 0 ? 0.3 : 1);
             if (this.hurtTimer <= 0) {
-                this.isHurt = false;
+                this.isHurt     = false;
                 this.invincible = false;
                 this.setAlpha(1);
             }
         }
 
-        if (this.attackCooldown > 0) this.attackCooldown -= delta;
+        if (this.attackCooldown > 0) {
+            this.attackCooldown -= delta;
+            // Fire queued attack the moment cooldown expires
+            if (this.attackCooldown <= 0 && this._attackQueued && !this.isAttacking) {
+                this._attackQueued = false;
+                this.startAttack();
+            }
+        }
 
         // Melee attack visual
         if (this.isAttacking) {
@@ -103,33 +129,54 @@ class Player extends Phaser.Physics.Arcade.Sprite {
             }
         }
 
-        // Jump
-        var jumpPressed = Phaser.Input.Keyboard.JustDown(this.cursors.up)    ||
-                          Phaser.Input.Keyboard.JustDown(this.wasd.up)       ||
-                          Phaser.Input.Keyboard.JustDown(this.cursors.space) ||
-                          vc.jumpJustPressed;
+        // Jump — with coyote time and jump buffer
+        var jumpJustPressed = Phaser.Input.Keyboard.JustDown(this.cursors.up)    ||
+                              Phaser.Input.Keyboard.JustDown(this.wasd.up)       ||
+                              Phaser.Input.Keyboard.JustDown(this.cursors.space) ||
+                              vc.jumpJustPressed;
 
-        if (jumpPressed) {
-            if (onGround) {
+        if (jumpJustPressed) {
+            if (onGround || this._coyoteTimer > 0) {
+                // Ground jump (or coyote)
                 this.body.setVelocityY(-this.stats.jumpPower);
-                this.jumpCount = 1;
+                this.jumpCount    = 1;
+                this._coyoteTimer = 0;
+                this._jumpBuffer  = 0;
             } else if (this.jumpCount < 2) {
-                this.body.setVelocityY(-this.stats.jumpPower * 0.8);
-                this.jumpCount = 2;
+                // Double jump
+                this.body.setVelocityY(-this.stats.jumpPower * 0.85);
+                this.jumpCount   = 2;
+                this._jumpBuffer = 0;
+            } else {
+                // In air with no jumps left — store buffer
+                this._jumpBuffer = 150;
             }
         }
 
+        // Execute buffered jump on landing
+        if (onGround && !this._wasOnGround && this._jumpBuffer > 0) {
+            this.body.setVelocityY(-this.stats.jumpPower);
+            this.jumpCount   = 1;
+            this._jumpBuffer = 0;
+        }
+        this._wasOnGround = onGround;
+
         // Drop through platform
-        if ((this.cursors.down && this.cursors.down.isDown) && jumpPressed) {
+        if (this.cursors.down && this.cursors.down.isDown && jumpJustPressed) {
             this.body.setVelocityY(200);
         }
 
-        // Attack
-        var atkPressed = Phaser.Input.Keyboard.JustDown(this.attackKey) ||
-                         Phaser.Input.Keyboard.JustDown(this.altAtkKey) ||
-                         vc.attackJustPressed;
-        if (atkPressed && !this.isAttacking && this.attackCooldown <= 0) {
-            this.startAttack();
+        // Attack — with queue
+        var atkJustPressed = Phaser.Input.Keyboard.JustDown(this.attackKey) ||
+                             Phaser.Input.Keyboard.JustDown(this.altAtkKey) ||
+                             vc.attackJustPressed;
+        if (atkJustPressed) {
+            if (!this.isAttacking && this.attackCooldown <= 0) {
+                this.startAttack();
+            } else if (this.attackCooldown > 0) {
+                // Queue attack for when cooldown ends (within 400ms window)
+                if (this.attackCooldown < 400) this._attackQueued = true;
+            }
         }
 
         // Inventory
@@ -165,13 +212,11 @@ class Player extends Phaser.Physics.Arcade.Sprite {
     startAttack() {
         var mode = this.getWeaponMode();
         if (mode === 'bow' || mode === 'magic') {
-            // Ranged — only use cooldown; no melee hitbox
             this.attackCooldown = 600;
             this._fireProjectile(mode);
         } else {
-            // Melee swing
-            this.isAttacking  = true;
-            this.attackTimer  = this.attackDuration;
+            this.isAttacking    = true;
+            this.attackTimer    = this.attackDuration;
             this.attackCooldown = 400;
             this.setTexture('player_atk');
             this._trySound('sfx_attack');
@@ -196,18 +241,14 @@ class Player extends Phaser.Physics.Arcade.Sprite {
             proj.body.setVelocityY(-30);
         } else {
             proj.body.setVelocityX(dir * 300);
-            // Magic bolt pulsing glow
             this.scene.tweens.add({
                 targets: proj,
                 alpha: { from: 0.5, to: 1 },
-                duration: 150,
-                yoyo: true,
-                repeat: -1
+                duration: 150, yoyo: true, repeat: -1
             });
         }
 
         this._projectiles.add(proj);
-        // Auto-destroy after 2s
         this.scene.time.delayedCall(2000, () => {
             if (proj && proj.active) proj.destroy();
         });
@@ -218,6 +259,15 @@ class Player extends Phaser.Physics.Arcade.Sprite {
         if (this.invincible || !this.active) return;
         var dmg = Math.max(1, amount - this.stats.defense);
         this.stats.hp = Math.max(0, this.stats.hp - dmg);
+
+        // Cancel ongoing attack cleanly
+        if (this.isAttacking) {
+            this.isAttacking = false;
+            this.attackSprite.setAlpha(0);
+            this.hitEnemiesThisSwing.clear();
+            this.setTexture('player');
+        }
+        this._attackQueued = false;
 
         this.isHurt     = true;
         this.invincible = true;
@@ -233,47 +283,57 @@ class Player extends Phaser.Physics.Arcade.Sprite {
     }
 
     die() {
-        this.active = false;
+        if (!this.active) return;
+        this.active      = false;
         this.body.enable = false;
         this.attackSprite.setAlpha(0);
+        this.setTexture('player');
 
         window.GameState.lives--;
 
+        // Death flash then fade
         this.scene.tweens.add({
             targets: this,
             alpha: 0,
-            y: this.y - 40,
-            duration: 600,
+            y: this.y - 50,
+            duration: 700,
+            ease: 'Power2',
             onComplete: () => {
                 if (window.GameState.lives > 0) {
-                    var cam     = this.scene.cameras.main;
-                    var diedText = this.scene.add.text(
-                        cam.scrollX + GAME_WIDTH / 2,
-                        cam.scrollY + GAME_HEIGHT / 2,
-                        'YOU DIED', {
-                            fontSize: '48px', fill: '#ff2222', fontStyle: 'bold',
-                            stroke: '#000000', strokeThickness: 6
-                        }
-                    ).setOrigin(0.5).setDepth(100).setAlpha(0);
-
-                    this.scene.tweens.add({
-                        targets: diedText,
-                        alpha: 1,
-                        duration: 400,
-                        yoyo: true,
-                        hold: 700,
-                        onComplete: () => {
-                            diedText.destroy();
-                            this.scene.scene.get('UIScene').events.emit('livesChanged', window.GameState.lives);
-                            this.scene.scene.stop('UIScene');
-                            this.scene.scene.stop('MobileScene');
-                            this.scene.scene.start('GameScene', { level: window.GameState.currentLevel });
-                        }
-                    });
+                    this._showDeathScreen();
                 } else {
                     this.scene.scene.start('GameOverScene');
                 }
             }
+        });
+    }
+
+    _showDeathScreen() {
+        var scene = this.scene;
+        var cam   = scene.cameras.main;
+        var cx    = cam.scrollX + GAME_WIDTH  / 2;
+        var cy    = cam.scrollY + GAME_HEIGHT / 2;
+
+        var overlay = scene.add.rectangle(cx, cy, GAME_WIDTH, GAME_HEIGHT, 0x000000, 0)
+            .setDepth(98).setScrollFactor(0);
+        scene.tweens.add({ targets: overlay, fillAlpha: 0.7, duration: 400 });
+
+        var txt = scene.add.text(cx, cy - 20, 'GESTORBEN', {
+            fontSize: '52px', fill: '#cc1111', fontStyle: 'bold',
+            stroke: '#000000', strokeThickness: 8
+        }).setOrigin(0.5).setDepth(99).setScrollFactor(0).setAlpha(0);
+
+        var sub = scene.add.text(cx, cy + 38, 'Respawne am letzten Checkpoint...', {
+            fontSize: '14px', fill: '#aa8888'
+        }).setOrigin(0.5).setDepth(99).setScrollFactor(0).setAlpha(0);
+
+        scene.tweens.add({ targets: [txt, sub], alpha: 1, duration: 350, delay: 100 });
+
+        scene.time.delayedCall(2000, () => {
+            scene.scene.get('UIScene').events.emit('livesChanged', window.GameState.lives);
+            scene.scene.stop('UIScene');
+            scene.scene.stop('MobileScene');
+            scene.scene.start('GameScene', { level: window.GameState.currentLevel });
         });
     }
 
@@ -303,7 +363,6 @@ class Player extends Phaser.Physics.Arcade.Sprite {
         this.stats.defense = this.baseStats.defense + bonus.defense;
         this.stats.hp      = Math.min(this.stats.hp + (this.stats.maxHp - prev), this.stats.maxHp);
         this.scene.events.emit('playerDamaged', this.stats.hp, this.stats.maxHp);
-        // Notify weapon mode change
         this.scene.events.emit('weaponModeChanged', this.getWeaponMode());
     }
 

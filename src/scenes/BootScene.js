@@ -8,6 +8,8 @@ class BootScene extends Phaser.Scene {
         this._drawKiriPortrait();
         this._drawAttackBox();
         this._drawTiles();
+        this._drawSpike();
+        this._drawMovingPlat();
         this._drawEnemies();
         this._drawProjectiles();
         this._drawBoss();
@@ -609,6 +611,44 @@ class BootScene extends Phaser.Scene {
     }
 
     // ── Exit Portal (32×48) ───────────────────────────────────────────────────
+    // ── Spike (32×16) — three upward fangs ──────────────────────────────────
+    _drawSpike() {
+        var g = this.make.graphics({ x: 0, y: 0, add: false });
+        // Base plate
+        g.fillStyle(0x441111, 1);
+        g.fillRect(0, 10, 32, 6);
+        // Three spike tips
+        var tips = [4, 14, 24];
+        tips.forEach(function (tx) {
+            g.fillStyle(0xcc2222, 1);
+            g.fillTriangle(tx, 0, tx + 4, 10, tx + 8, 10);
+            g.fillStyle(0xff4444, 1);
+            g.fillTriangle(tx + 2, 0, tx + 4, 6, tx + 6, 6);
+            g.fillStyle(0xff8888, 1);
+            g.fillRect(tx + 3, 0, 2, 3);
+        });
+        g.generateTexture('spike', 32, 16);
+        g.destroy();
+    }
+
+    // ── Moving platform (80×12) — teal crystal slab ──────────────────────────
+    _drawMovingPlat() {
+        var g = this.make.graphics({ x: 0, y: 0, add: false });
+        g.fillStyle(0x004455, 1);
+        g.fillRect(0, 2, 80, 10);
+        g.fillStyle(0x0088aa, 1);
+        g.fillRect(0, 2, 80, 3);
+        g.fillStyle(0x00ccdd, 0.6);
+        g.fillRect(2, 2, 76, 1);
+        // Glyph marks
+        g.fillStyle(0x00eeff, 0.5);
+        for (var i = 8; i < 72; i += 16) {
+            g.fillRect(i, 5, 8, 2);
+        }
+        g.generateTexture('moving_plat', 80, 12);
+        g.destroy();
+    }
+
     _drawPortal() {
         var g = this.make.graphics({ x: 0, y: 0, add: false });
         g.fillStyle(0x004444, 0.5);

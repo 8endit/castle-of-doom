@@ -1,5 +1,6 @@
 // Level 3 — The Inner Sanctum
-// 40 cols × 16 rows — final boss arena
+// 40 cols × 16 rows — final boss arena, no regular enemies
+// The player walks through a silent, ominous approach before the boss fight.
 var LEVEL_3 = {
     name: 'The Inner Sanctum',
     bgColor: 0x200010,
@@ -31,24 +32,30 @@ var LEVEL_3 = {
     ],
     playerStart: { x: 96, y: 430 },
     enemies: [],
-    boss: { x: 1120, y: 380 },
+    boss: { x: 1088, y: 380 },
     exitX: 1220,
+    spikes: [
+        // Approach corridor — visible warnings, not cheap deaths
+        { x: 352, y: 472 }, { x: 384, y: 472 },
+        { x: 672, y: 472 }, { x: 704, y: 472 },
+        { x: 896, y: 472 }
+    ],
+    movingPlatforms: [
+        { x: 512, y: 336, range: 80, axis: 'x', speed: 85 }
+    ],
     storyBefore: [
-        '[KIRI] "Hier ist es. Das Innere Heiligtum."',
-        '[KIRI] "Ich kann die Flamme sehen — dort in der Mitte. Korrumpiert und gefangen."',
-        '[KIRI] "Krieger... ich muss dir etwas sagen. Wenn der Herr des Verderbens besiegt wird..."',
-        '[KIRI] "Der dunkle Zauber, der diese Burg aufrechterhaelt, wird zerbrechen. Und ich mit ihm."',
-        '"Was meinst du damit?"',
-        '[KIRI] "Ich bin an die Flamme gebunden. Wenn sie befreit wird... muss ich in den Wald zurueckkehren."',
-        '[KIRI] "Bitte — zoeger nicht. Befreie die Flamme. Rette mein Zuhause."',
-        '[ Das letzte Gefecht. ]'
+        '[KIRI] "Das Innere Heiligtum. Die Flamme — ich kann sie sehen."',
+        '[KIRI] "Krieger... ich muss dir etwas sagen, bevor wir reingehen."',
+        '[KIRI] "Wenn der Herr des Verderbens faellt, zerbricht der Zauber. Und ich bin an die Flamme gebunden."',
+        '[KIRI] "Das bedeutet... ich muss zurueck in den Wald. Fuer immer."',
+        '[KIRI] "Zoegere nicht. Bitte."'
     ],
     storyAfter: [
         'Der Herr des Verderbens faellt.',
         'Die dunkle Flamme zersplittert. Licht flutet das Heiligtum.',
         '[KIRI] "...Die Flamme ist frei. Ich kann spueren, wie sie den Wald heilt."',
         '[KIRI] "Danke, Krieger. Ich werde deinen Mut niemals vergessen."',
-        '[KIRI] "Eines Tages, wenn der Rote Wald wieder bluehend ist... besuche mich."',
+        '[KIRI] "Wenn der Rote Wald wieder bluehend ist... besuche mich."',
         'Als die Burg zerfaellt, springt ein kleiner orangefarbener Panda ins goldene Licht.',
         'Und verschwindet.',
         'ENDE — Die Flamme des Roten Waldes'

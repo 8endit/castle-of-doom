@@ -75,6 +75,14 @@ class StoryScene extends Phaser.Scene {
         this.input.keyboard.on('keydown-SPACE', advance);
         this.input.keyboard.on('keydown-ENTER', advance);
         this.input.on('pointerdown', advance);
+
+        // ESC skips entire story immediately
+        this.input.keyboard.on('keydown-ESC', () => { this._next(); });
+
+        // Skip hint
+        this.add.text(GAME_WIDTH - 48, cy - 88, 'ESC überspringen', {
+            fontSize: '9px', fill: '#332255'
+        }).setOrigin(0.5, 1);
     }
 
     update(time, delta) {

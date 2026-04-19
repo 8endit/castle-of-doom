@@ -38,8 +38,7 @@ class GameScene extends Phaser.Scene {
         this.kiri = new KiriCompanion(this, spawnX - 40, spawnY - 20);
         this.player.kiri = this.kiri;
 
-        // Greet the player at level start
-        this._scheduleKiriGreeting();
+        // (level greetings are handled in StoryScene before entering)
 
         // Enemy group
         this.enemies   = this.physics.add.group({ runChildUpdate: true });
@@ -52,6 +51,8 @@ class GameScene extends Phaser.Scene {
         if (ld.boss) this._spawnBoss(ld.boss);
 
         this._spawnCheckpoints(ld.checkpoints || []);
+        this._spawnSpikes(ld.spikes || []);
+        this._spawnMovingPlatforms(ld.movingPlatforms || []);
 
         // Exit portal
         this.exitPortal = this.add.sprite(ld.exitX, ld.playerStart.y - 8, 'exit_portal');
@@ -115,6 +116,12 @@ class GameScene extends Phaser.Scene {
         if (!this.scene.isActive('UIScene'))     this.scene.launch('UIScene');
         if (!this.scene.isActive('MobileScene')) this.scene.launch('MobileScene');
 
+        // Pause
+        this._pauseKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.P);
+        this._escKey   = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ESC);
+        this.input.keyboard.on('keydown-P',   () => this._togglePause());
+        this.input.keyboard.on('keydown-ESC', () => this._togglePause());
+
         this._buildBackground(W, H);
 
         if (!window._hintShown) {
@@ -137,6 +144,9 @@ class GameScene extends Phaser.Scene {
         if (this.kiri && this.kiri.active) {
             this.kiri.follow(this.player, delta);
         }
+
+        // Moving platforms
+        this._updateMovingPlatforms(delta);
 
         // Proximity enemy activation
         if (this._inactiveEnemies && this._inactiveEnemies.length > 0) {
@@ -193,6 +203,20 @@ class GameScene extends Phaser.Scene {
                 enemy.attackTimer = 900;
             }
         });
+
+        // Reset one-frame virtual control pulses AFTER all game logic has read them
+        if (window.VirtualControls) {
+            window.VirtualControls.jumpJustPressed   = false;
+            window.VirtualControls.attackJustPressed = false;
+            window.VirtualControls.potionJustPressed = false;
+            window.VirtualControls.kiriJustPressed   = false;
+        }
+    }
+
+    _togglePause() {
+        if (this.scene.isActive('PauseScene')) return;
+        this.scene.pause();
+        this.scene.launch('PauseScene', { from: 'GameScene' });
     }
 
     _platCheck(player, plat) {
@@ -261,6 +285,59 @@ class GameScene extends Phaser.Scene {
         });
     }
 
+    _spawnSpikes(spikes) {
+        this.spikeGroup = this.physics.add.staticGroup();
+        spikes.forEach(cfg => {
+            var sp = this.spikeGroup.create(cfg.x, cfg.y, 'spike');
+            sp.body.setSize(28, 10).setOffset(2, 6);
+        });
+        this.physics.add.overlap(this.player, this.spikeGroup, () => {
+            if (this.player._spikeTimer && this.player._spikeTimer > 0) return;
+            this.player.takeDamage(25);
+            this.player._spikeTimer = 800;
+        });
+    }
+
+    _spawnMovingPlatforms(platforms) {
+        this.movingPlatforms = this.physics.add.group();
+        platforms.forEach(cfg => {
+            var plat = this.physics.add.image(cfg.x, cfg.y, 'moving_plat');
+            plat.body.allowGravity = false;
+            plat.body.immovable = true;
+            plat._cfg = { ox: cfg.x, oy: cfg.y, dir: 1, axis: cfg.axis, range: cfg.range, speed: cfg.speed };
+            this.movingPlatforms.add(plat);
+        });
+        this.physics.add.collider(this.player, this.movingPlatforms, null, this._platCheck, this);
+    }
+
+    _updateMovingPlatforms(delta) {
+        if (!this.movingPlatforms) return;
+        var dt = delta / 1000;
+        if (this.player._spikeTimer > 0) this.player._spikeTimer -= delta;
+        this.movingPlatforms.getChildren().forEach(plat => {
+            var c = plat._cfg;
+            var prevX = plat.x, prevY = plat.y;
+            if (c.axis === 'x') {
+                plat.x += c.speed * c.dir * dt;
+                if (plat.x > c.ox + c.range) { plat.x = c.ox + c.range; c.dir = -1; }
+                if (plat.x < c.ox - c.range) { plat.x = c.ox - c.range; c.dir = 1; }
+            } else {
+                plat.y += c.speed * c.dir * dt;
+                if (plat.y > c.oy + c.range) { plat.y = c.oy + c.range; c.dir = -1; }
+                if (plat.y < c.oy - c.range) { plat.y = c.oy - c.range; c.dir = 1; }
+            }
+            plat.body.reset(plat.x, plat.y);
+            var dx = plat.x - prevX, dy = plat.y - prevY;
+            var hw = plat.displayWidth / 2 + 4;
+            if (this.player.body.blocked.down &&
+                this.player.x > plat.x - hw && this.player.x < plat.x + hw &&
+                Math.abs(this.player.body.bottom - plat.body.top) < 10) {
+                this.player.x += dx;
+                if (dy < 0) this.player.y += dy;
+            }
+        });
+    }
+
     _spawnEnemy(cfg) {
         var enemy;
         if      (cfg.type === 'patrol') enemy = new EnemyPatrol(this, cfg.x, cfg.y, cfg);
@@ -292,18 +369,22 @@ class GameScene extends Phaser.Scene {
         this.boss.onDeath = (x, y, forced) => this._onEnemyDied(x, y, forced);
         this.physics.add.collider(this.boss, this.solidLayer);
 
-        var nameTag = this.add.text(cfg.x, cfg.y - 50, 'DOOM GUARDIAN', {
-            fontSize: '12px', fill: '#ff4444', fontStyle: 'bold'
-        }).setOrigin(0.5, 1).setDepth(6);
+        var bossNames = {
+            LEVEL_1: 'TORWÄCHTER',
+            LEVEL_2: 'KATAKOMBEN-WÄCHTER',
+            LEVEL_3: 'HERR DES VERDERBENS'
+        };
+        var nameTag = this.add.text(cfg.x, cfg.y - 50,
+            bossNames[this.levelKey] || 'WÄCHTER', {
+                fontSize: '12px', fill: '#ff4444', fontStyle: 'bold'
+            }).setOrigin(0.5, 1).setDepth(6);
         this.bossNameTag = nameTag;
-
-        // Kiri warns about boss
-        this.time.delayedCall(500, () => {
-            if (this.kiri) this.kiri.say('Vorsicht! Das ist der Waechter!', 3000);
-        });
     }
 
     _onEnemyDied(x, y, forced) {
+        window.GameState.kills = (window.GameState.kills || 0) + 1;
+        if (this.kiri) this.kiri.onEnemyKilled();
+
         if (LootSystem.shouldDrop() || forced) {
             var loot = LootSystem.spawn(this, x, y, forced);
             this.lootItems.add(loot);

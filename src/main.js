@@ -6,7 +6,10 @@ var TILE_SIZE   = 32;
 window.GameState = {
     lives: 3,
     currentLevel: 'LEVEL_1',
-    checkpoint: null   // { x, y } — set when player reaches a checkpoint
+    checkpoint: null,
+    kills: 0,
+    deaths: 0,
+    startTime: 0
 };
 
 var game = new Phaser.Game({
@@ -35,6 +38,7 @@ var game = new Phaser.Game({
         MobileScene,
         InventoryScene,
         StoryScene,
+        PauseScene,
         GameOverScene,
         WinScene
     ]
