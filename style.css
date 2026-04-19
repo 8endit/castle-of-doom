@@ -1,5 +1,28 @@
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
+/* ── PWA install hint ─────────────────────────────────────────────── */
+#pwa-hint {
+    display: none; /* shown by JS on Safari iOS non-standalone */
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    z-index: 9999;
+    background: rgba(80, 40, 160, 0.95);
+    color: #ddd;
+    font-family: -apple-system, monospace;
+    font-size: 13px;
+    padding: 10px 40px 10px 14px;
+    text-align: center;
+    border-bottom: 1px solid rgba(160, 120, 255, 0.5);
+}
+#pwa-hint-close {
+    position: absolute;
+    right: 10px; top: 50%;
+    transform: translateY(-50%);
+    background: none; border: none;
+    color: #aaa; font-size: 16px;
+    cursor: pointer; padding: 4px 8px;
+}
+
 html, body {
     background: #000;
     width: 100%;
