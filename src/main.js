@@ -1,5 +1,5 @@
-var GAME_WIDTH  = 800;
-var GAME_HEIGHT = 512;
+var GAME_WIDTH  = 850;
+var GAME_HEIGHT = 390;
 var TILE_SIZE   = 32;
 
 // Global game state (lives, checkpoint, current level)
