@@ -8,13 +8,13 @@ class UIScene extends Phaser.Scene {
         this.hpText = this.add.text(16, 10, 'HP', { fontSize: '11px', fill: '#ffffff' });
         this.hpVal  = this.add.text(175, 10, '', { fontSize: '11px', fill: '#ffaaaa' });
 
-        // ── Boss bar ─────────────────────────────────────────────────────────
-        this.bossLabel = this.add.text(GAME_WIDTH / 2, GAME_HEIGHT - 36, '', {
+        // ── Boss bar (positioned higher so DOM buttons don't overlap on mobile) ─
+        this.bossLabel = this.add.text(GAME_WIDTH / 2, GAME_HEIGHT - 80, '', {
             fontSize: '13px', fill: '#ff4444', fontStyle: 'bold'
         }).setOrigin(0.5, 1).setVisible(false);
-        this.bossBg  = this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT - 22, 300, 14, 0x330000)
+        this.bossBg  = this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT - 66, 300, 14, 0x330000)
             .setOrigin(0.5, 0).setVisible(false);
-        this.bossBar = this.add.rectangle(GAME_WIDTH / 2 - 150, GAME_HEIGHT - 22, 300, 14, 0xff0000)
+        this.bossBar = this.add.rectangle(GAME_WIDTH / 2 - 150, GAME_HEIGHT - 66, 300, 14, 0xff0000)
             .setOrigin(0, 0).setVisible(false);
         this.bossMaxHp = 400;
 
@@ -70,27 +70,27 @@ class UIScene extends Phaser.Scene {
         this.dmgFlash = this.add.rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, 0xff0000, 0)
             .setOrigin(0, 0).setDepth(50);
 
-        // ── Lives ─────────────────────────────────────────────────────────────
+        // ── Lives (top area — stays clear of bottom touch buttons) ───────────
         this.heartIcons = [];
         for (var h = 0; h < 3; h++) {
-            var heart = this.add.text(12 + h * 22, GAME_HEIGHT - 28, '♥', {
+            var heart = this.add.text(14 + h * 22, 72, '♥', {
                 fontSize: '18px', fill: '#ff3333'
             });
             this.heartIcons.push(heart);
         }
         this._updateLives(window.GameState.lives);
 
-        // ── Potion slots ──────────────────────────────────────────────────────
+        // ── Potion slots (next to hearts) ─────────────────────────────────────
         this.potionSlots = [];
         for (var p = 0; p < 2; p++) {
-            var slotBg = this.add.rectangle(82 + p * 28, GAME_HEIGHT - 20, 24, 24, 0x222222)
+            var slotBg = this.add.rectangle(88 + p * 28, 80, 22, 22, 0x222222)
                 .setOrigin(0.5).setStrokeStyle(1, 0x553333);
-            var slotIcon = this.add.text(82 + p * 28, GAME_HEIGHT - 20, '❤', {
-                fontSize: '14px', fill: '#441111'
+            var slotIcon = this.add.text(88 + p * 28, 80, '❤', {
+                fontSize: '12px', fill: '#441111'
             }).setOrigin(0.5);
             this.potionSlots.push({ bg: slotBg, icon: slotIcon });
         }
-        this.add.text(82, GAME_HEIGHT - 38, '[Q]', { fontSize: '9px', fill: '#886666' }).setOrigin(0.5, 1);
+        this.add.text(88, 62, '[Q]', { fontSize: '9px', fill: '#886666' }).setOrigin(0.5, 1);
 
         // ── Event listeners ───────────────────────────────────────────────────
         this.events.on('playerHP',         this._updateHP,        this);
