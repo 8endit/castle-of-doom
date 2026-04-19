@@ -48,10 +48,18 @@
 
   <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
 
-  <!-- Level data (loaded first — no dependencies) -->
-  <script src="src/levels/level1.js"></script>
-  <script src="src/levels/level2.js"></script>
-  <script src="src/levels/level3.js"></script>
+  <!-- World + room data (loaded first — WorldData defines makeRoomTiles helper) -->
+  <script src="src/rooms/WorldData.js"></script>
+  <script src="src/rooms/R01.js"></script>
+  <script src="src/rooms/R02.js"></script>
+  <script src="src/rooms/R03.js"></script>
+  <script src="src/rooms/R04.js"></script>
+  <script src="src/rooms/R05.js"></script>
+  <script src="src/rooms/R06.js"></script>
+  <script src="src/rooms/R07.js"></script>
+  <script src="src/rooms/R08.js"></script>
+  <script src="src/rooms/R09.js"></script>
+  <script src="src/rooms/R10.js"></script>
 
   <!-- Utilities -->
   <script src="src/utils/TileMap.js"></script>
@@ -65,10 +73,11 @@
   <script src="src/entities/EnemyRanged.js"></script>
   <script src="src/entities/Boss.js"></script>
 
-  <!-- Systems (depend on Phaser + levels) -->
+  <!-- Systems (depend on Phaser + rooms) -->
   <script src="src/systems/LootSystem.js"></script>
   <script src="src/systems/Inventory.js"></script>
   <script src="src/systems/CombatSystem.js"></script>
+  <script src="src/systems/ProgressSystem.js"></script>
 
   <!-- Scenes (depend on everything above) -->
   <script src="src/scenes/BootScene.js"></script>

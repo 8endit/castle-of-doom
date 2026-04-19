@@ -58,10 +58,10 @@ class UIScene extends Phaser.Scene {
         }).setOrigin(0.5, 0).setAlpha(0);
         this.toastTimer = 0;
 
-        // ── Level name ────────────────────────────────────────────────────────
+        // ── Room name ─────────────────────────────────────────────────────────
         var gs = this.scene.get('GameScene');
-        if (gs && gs.levelData) {
-            this.add.text(GAME_WIDTH - 12, 12, gs.levelData.name || '', {
+        if (gs && gs.room) {
+            this.add.text(GAME_WIDTH - 12, 12, gs.room.title || '', {
                 fontSize: '12px', fill: '#6688aa'
             }).setOrigin(1, 0);
         }

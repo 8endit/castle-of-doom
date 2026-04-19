@@ -107,20 +107,15 @@ class WinScene extends Phaser.Scene {
     }
 
     _restart() {
-        window.GameState.lives        = 3;
-        window.GameState.currentLevel = 'LEVEL_1';
-        window.GameState.checkpoint   = null;
-        window.GameState.kills        = 0;
-        window.GameState.deaths       = 0;
-        window.GameState.startTime    = Date.now();
-        window._hintShown             = false;
+        window.GameState.lives     = 3;
+        window.GameState.kills     = 0;
+        window.GameState.deaths    = 0;
+        window.GameState.startTime = Date.now();
+        window._hintShown          = false;
+        ProgressSystem.reset();
         this.cameras.main.fade(500, 0, 0, 0, false, function (cam, p) {
             if (p === 1) {
-                this.scene.start('StoryScene', {
-                    lines: LEVEL_1.storyBefore || [],
-                    nextScene: 'GameScene',
-                    nextData: { level: 'LEVEL_1' }
-                });
+                this.scene.start('GameScene', { room: WorldData.startRoom });
             }
         }, this);
     }

@@ -51,14 +51,14 @@ class GameOverScene extends Phaser.Scene {
 
         // ── Stats ─────────────────────────────────────────────────────────────
         var gs = window.GameState;
-        var levelNames = { LEVEL_1: 'Castle Courtyard', LEVEL_2: 'The Catacombs', LEVEL_3: 'The Inner Sanctum' };
-        var levelName = levelNames[gs.currentLevel] || gs.currentLevel;
+        var roomId = (gs.progress && gs.progress.currentRoom) || 'R01';
+        var roomName = WorldData.title(roomId);
         var elapsed = gs.startTime ? Math.floor((Date.now() - gs.startTime) / 1000) : 0;
         var mm = Math.floor(elapsed / 60), ss = elapsed % 60;
         var timeStr = mm + ':' + (ss < 10 ? '0' : '') + ss;
 
         this.add.text(cx, cy + 4, [
-            'Level reached:     ' + levelName,
+            'Room reached:      ' + roomName,
             'Enemies slain:    ' + (gs.kills || 0),
             'Time played:       ' + timeStr
         ].join('\n'), {
@@ -103,15 +103,13 @@ class GameOverScene extends Phaser.Scene {
     }
 
     _restart() {
+        window.GameState.lives     = 3;
         window.GameState.kills     = 0;
         window.GameState.startTime = Date.now();
+        ProgressSystem.reset();
         this.cameras.main.fade(400, 0, 0, 0, false, function (cam, p) {
             if (p === 1) {
-                this.scene.start('StoryScene', {
-                    lines: LEVEL_1.storyBefore || [],
-                    nextScene: 'GameScene',
-                    nextData: { level: 'LEVEL_1' }
-                });
+                this.scene.start('GameScene', { room: WorldData.startRoom });
             }
         }, this);
     }

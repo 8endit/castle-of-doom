@@ -253,19 +253,21 @@ class MenuScene extends Phaser.Scene {
     }
 
     _startGame() {
-        window.GameState.lives        = 3;
-        window.GameState.currentLevel = 'LEVEL_1';
-        window.GameState.checkpoint   = null;
-        window.GameState.kills        = 0;
-        window.GameState.deaths       = 0;
-        window.GameState.startTime    = Date.now();
-        window._hintShown             = false;
+        window.GameState.lives     = 3;
+        window.GameState.kills     = 0;
+        window.GameState.deaths    = 0;
+        window.GameState.startTime = Date.now();
+        window._hintShown          = false;
+        ProgressSystem.reset();
+        var startRoom = WorldData.get(WorldData.startRoom);
+        // Mark R01 visited now so GameScene won't re-show the opening story
+        window.GameState.progress.visitedRooms[WorldData.startRoom] = true;
         this.cameras.main.fade(500, 0, 0, 0, false, function (cam, p) {
             if (p === 1) {
                 this.scene.start('StoryScene', {
-                    lines: LEVEL_1.storyBefore || [],
+                    lines: (startRoom && startRoom.storyBefore) || [],
                     nextScene: 'GameScene',
-                    nextData: { level: 'LEVEL_1' }
+                    nextData: { room: WorldData.startRoom }
                 });
             }
         }, this);
