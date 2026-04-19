@@ -3,7 +3,9 @@ window.VirtualControls = {
     left:              false,
     right:             false,
     jumpJustPressed:   false,
-    attackJustPressed: false
+    attackJustPressed: false,
+    potionJustPressed: false,
+    kiriJustPressed:   false
 };
 
 class MobileScene extends Phaser.Scene {
@@ -12,35 +14,36 @@ class MobileScene extends Phaser.Scene {
     create() {
         var W = GAME_WIDTH;
         var H = GAME_HEIGHT;
-        var R = 38;   // button radius
+        var R = 36;
         var alpha = 0.55;
 
         // ── Left/Right buttons (bottom-left) ──────────────────────────────
-        this._makeBtn(R + 16,       H - R - 20, R, '◀', alpha, 'left');
-        this._makeBtn(R * 2 + 52,   H - R - 20, R, '▶', alpha, 'right');
+        this._makeBtn(R + 16,      H - R - 20, R, '◀', alpha, 'left');
+        this._makeBtn(R * 2 + 50,  H - R - 20, R, '▶', alpha, 'right');
 
-        // ── Jump / Attack buttons (bottom-right) ──────────────────────────
-        this._makeBtn(W - R * 2 - 52, H - R - 20, R, '⬆', alpha, 'jump', 0x2255cc);
-        this._makeBtn(W - R - 16,    H - R - 20, R, 'Z',  alpha, 'attack', 0xcc2222);
+        // ── Action buttons (bottom-right) ──────────────────────────────────
+        this._makeBtn(W - R * 4 - 120, H - R - 20, R, '❤', alpha, 'potion', 0x882222);
+        this._makeBtn(W - R * 3 - 84,  H - R - 20, R, '🐾', alpha, 'kiri',   0x884400);
+        this._makeBtn(W - R * 2 - 48,  H - R - 20, R, '⬆', alpha, 'jump',   0x2255cc);
+        this._makeBtn(W - R - 16,      H - R - 20, R, 'Z',  alpha, 'attack', 0xcc2222);
 
-        // Label hints (tiny text)
-        var style = { fontSize: '9px', fill: '#ffffff88' };
-        this.add.text(R + 16,       H - 12, 'LEFT',   style).setOrigin(0.5, 1);
-        this.add.text(R * 2 + 52,   H - 12, 'RIGHT',  style).setOrigin(0.5, 1);
-        this.add.text(W - R*2 - 52, H - 12, 'JUMP',   style).setOrigin(0.5, 1);
-        this.add.text(W - R - 16,   H - 12, 'ATTACK', style).setOrigin(0.5, 1);
+        // Label hints
+        var style = { fontSize: '8px', fill: '#ffffff88' };
+        this.add.text(R + 16,          H - 10, 'LEFT',   style).setOrigin(0.5, 1);
+        this.add.text(R * 2 + 50,      H - 10, 'RIGHT',  style).setOrigin(0.5, 1);
+        this.add.text(W - R*4 - 120,   H - 10, 'POTION', style).setOrigin(0.5, 1);
+        this.add.text(W - R*3 - 84,    H - 10, 'KIRI',   style).setOrigin(0.5, 1);
+        this.add.text(W - R*2 - 48,    H - 10, 'JUMP',   style).setOrigin(0.5, 1);
+        this.add.text(W - R - 16,      H - 10, 'ATTACK', style).setOrigin(0.5, 1);
 
-        // Prevent touch events from bubbling to game camera
         this.input.on('pointerdown', (p) => p.event && p.event.stopPropagation && p.event.stopPropagation());
     }
 
     update() {
-        // "Just pressed" flags are consumed by Player in its update — reset here
-        // after one full frame cycle so they're always valid for that frame
-        // (MobileScene runs after GameScene in the scene queue, so flags were
-        //  already read by Player.update this frame)
         window.VirtualControls.jumpJustPressed   = false;
         window.VirtualControls.attackJustPressed = false;
+        window.VirtualControls.potionJustPressed = false;
+        window.VirtualControls.kiriJustPressed   = false;
     }
 
     _makeBtn(x, y, r, label, alpha, action, color) {
@@ -54,16 +57,13 @@ class MobileScene extends Phaser.Scene {
             g.lineStyle(2, 0xffffff, 0.4);
             g.strokeCircle(x, y, r);
         };
-
         redraw(false);
 
         var txt = this.add.text(x, y, label, {
-            fontSize: '22px', fill: '#ffffff', fontStyle: 'bold'
+            fontSize: '20px', fill: '#ffffff', fontStyle: 'bold'
         }).setOrigin(0.5, 0.5);
 
-        // Hit zone (invisible rectangle over the circle for easier tapping)
         var zone = this.add.zone(x, y, r * 2.2, r * 2.2).setInteractive();
-
         zone.on('pointerover',  () => { redraw(true);  this._pressAction(action, true);  });
         zone.on('pointerout',   () => { redraw(false); this._pressAction(action, false); });
         zone.on('pointerdown',  () => { redraw(true);  this._pressAction(action, true);  });
@@ -72,9 +72,11 @@ class MobileScene extends Phaser.Scene {
 
     _pressAction(action, isDown) {
         var vc = window.VirtualControls;
-        if (action === 'left')  vc.left   = isDown;
-        if (action === 'right') vc.right  = isDown;
-        if (action === 'jump'  && isDown) vc.jumpJustPressed   = true;
-        if (action === 'attack'&& isDown) vc.attackJustPressed = true;
+        if (action === 'left')   vc.left   = isDown;
+        if (action === 'right')  vc.right  = isDown;
+        if (action === 'jump'   && isDown) vc.jumpJustPressed   = true;
+        if (action === 'attack' && isDown) vc.attackJustPressed = true;
+        if (action === 'potion' && isDown) vc.potionJustPressed = true;
+        if (action === 'kiri'   && isDown) vc.kiriJustPressed   = true;
     }
 }

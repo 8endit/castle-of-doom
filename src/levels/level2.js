@@ -1,5 +1,5 @@
 // Level 2 — The Catacombs
-// 60 cols × 16 rows — darker, more pits, more enemies
+// 60 cols × 16 rows — darker, pits, stalactites
 var LEVEL_2 = {
     name: 'The Catacombs',
     bgColor: 0x0a0a18,
@@ -10,51 +10,59 @@ var LEVEL_2 = {
       [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
       // row  2
       [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
-      // row  3 — ceiling stalactites (solid blocks hanging down)
+      // row  3 — stalactites
       [1,0,0,1,1,0,0,0,0,1,1,0,0,0,0,1,0,0,0,0,1,1,0,0,0,0,1,0,0,0,0,1,1,0,0,0,0,1,0,0,0,0,1,1,0,0,0,0,1,0,0,0,0,1,1,0,0,0,0,1],
       // row  4
       [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
-      // row  5 — upper platforms
-      [1,0,2,2,2,0,0,0,0,2,2,2,0,0,0,0,2,2,0,0,0,0,2,2,2,0,0,0,0,2,2,0,0,0,0,2,2,2,0,0,0,0,2,2,0,0,0,0,2,2,2,0,0,0,0,0,0,0,0,1],
+      // row  5 — upper platforms (alt route over pits)
+      [1,0,2,2,2,2,0,0,0,0,2,2,2,2,0,0,0,0,2,2,2,2,0,0,0,0,2,2,2,2,0,0,0,0,2,2,2,2,0,0,0,0,2,2,2,2,0,0,0,0,2,2,2,2,0,0,0,0,0,1],
       // row  6
       [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
-      // row  7 — mid platforms (staggered for jumping puzzle)
-      [1,0,0,0,0,2,2,0,0,0,0,0,2,2,0,0,0,0,0,2,2,0,0,0,0,0,2,2,0,0,0,0,0,2,2,0,0,0,0,0,2,2,0,0,0,0,0,2,2,0,0,0,0,0,0,0,0,0,0,1],
+      // row  7 — mid platforms
+      [1,0,0,0,0,2,2,2,0,0,0,0,2,2,2,0,0,0,0,2,2,2,0,0,0,0,2,2,2,0,0,0,0,2,2,2,0,0,0,0,2,2,2,0,0,0,0,2,2,2,0,0,0,0,0,0,0,0,0,1],
       // row  8
       [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
-      // row  9
+      // rows 9-14
       [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
-      // row 10
       [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
-      // row 11
       [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
-      // row 12
       [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
-      // row 13
       [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
-      // row 14 — player level
       [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
-      // row 15 — main floor with pits
-      [1,1,1,1,1,1,1,1,0,0,0,1,1,1,1,1,1,0,0,0,1,1,1,1,1,1,0,0,0,1,1,1,1,1,1,0,0,0,1,1,1,1,1,1,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1],
+      // row 15 — floor with pits
+      [1,1,1,1,1,1,1,1,1,0,0,1,1,1,1,1,1,1,0,0,1,1,1,1,1,1,1,0,0,1,1,1,1,1,1,1,0,0,1,1,1,1,1,1,1,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1],
     ],
     playerStart: { x: 64, y: 430 },
     enemies: [
-        { type: 'chaser', x: 352,  y: 430 },
-        { type: 'ranged', x: 544,  y: 430 },
-        { type: 'patrol', x: 704,  y: 430, min: 640,  max: 864  },
-        { type: 'chaser', x: 896,  y: 430 },
-        { type: 'ranged', x: 1056, y: 430 },
-        { type: 'chaser', x: 1280, y: 430 },
-        { type: 'patrol', x: 1440, y: 430, min: 1376, max: 1600 },
-        { type: 'ranged', x: 1600, y: 430 },
-        { type: 'chaser', x: 1760, y: 430 },
+        { type: 'chaser', x: 288,  y: 430 },
+        { type: 'patrol', x: 480,  y: 430, min: 384,  max: 544  },
+        { type: 'ranged', x: 672,  y: 430 },
+        { type: 'chaser', x: 832,  y: 430 },
+        { type: 'patrol', x: 1024, y: 430, min: 960,  max: 1120 },
+        { type: 'ranged', x: 1184, y: 430 },
+        { type: 'chaser', x: 1344, y: 430 },
+        { type: 'patrol', x: 1504, y: 430, min: 1440, max: 1600 },
+        { type: 'ranged', x: 1632, y: 430 },
     ],
     boss: { x: 1760, y: 400 },
     exitX: 1872,
-    storyAfter: [
-        'The catacombs fall silent at last.',
-        'Above you, the Throne Room looms.',
-        'Face the Dark Lord and end this curse!'
+    storyBefore: [
+        'Die Katakomben der Verzweiflung strecken sich endlos unter der Burg.',
+        '[KIRI] "Irgendetwas stimmt hier nicht. Dieser Ort... ich erkenne diese Korruption."',
+        '[KIRI] "Die Burg saugt nicht nur den Wald aus — sie stiehlt die Seelen der Gefallenen."',
+        '[KIRI] "Diese Kreaturen waren einst Hueter wie ich. Jetzt dienen sie der Dunkelheit."',
+        '"Dann kaempfen wir, um sie zu befreien."',
+        '[KIRI] "Ja. Zaehle auf mich, Krieger. Die Flamme wartet tief unten."'
     ],
-    nextLevel: 'LEVEL_3'
+    storyAfter: [
+        '[KIRI] "Ich kann die Flamme riechen! Sie ist nah. Aber etwas Dunkles bewacht sie."',
+        '[KIRI] "Der Herr dieser Burg... er war derjenige, der die Flamme gestohlen hat."',
+        '[KIRI] "Er suchte Unsterblichkeit. Er nahm die Kraft der Flamme fuer sich selbst."',
+        'Dies ist das Endspiel. Das Schicksal des Roten Waldes liegt in deinen Haenden.'
+    ],
+    nextLevel: 'LEVEL_3',
+    checkpoints: [
+        { x: 608,  y: 430 },
+        { x: 1248, y: 430 }
+    ]
 };
