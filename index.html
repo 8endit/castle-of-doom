@@ -5,10 +5,19 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#000000">
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icon-192.png">
   <title>Castle of Doom</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
+
+  <!-- "Add to Home Screen" hint (shown on Safari iOS, hidden when standalone) -->
+  <div id="pwa-hint">
+    <span id="pwa-hint-text">&#x2191;&nbsp; Teile &rarr; &ldquo;Zum Home-Bildschirm&rdquo; &rarr; App öffnen = Vollbild ohne Browser</span>
+    <button id="pwa-hint-close" onclick="document.getElementById('pwa-hint').style.display='none'">&#x2715;</button>
+  </div>
 
   <!-- Mobile controls overlay — shown only on touch devices via JS -->
   <div id="m-ui">
@@ -74,6 +83,18 @@
 
   <!-- Entry point -->
   <script src="src/main.js"></script>
+
+  <!-- Show PWA install hint on Safari iOS when not already standalone -->
+  <script>
+  (function () {
+    var isIOS        = /iphone|ipad|ipod/i.test(navigator.userAgent);
+    var isStandalone = window.navigator.standalone === true;
+    var isSafari     = /safari/i.test(navigator.userAgent) && !/chrome|crios|fxios/i.test(navigator.userAgent);
+    if (isIOS && isSafari && !isStandalone) {
+      document.getElementById('pwa-hint').style.display = 'block';
+    }
+  })();
+  </script>
 
   <!-- Mobile touch wiring (runs after VirtualControls is defined by MobileScene.js) -->
   <script>
