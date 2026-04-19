@@ -2,13 +2,41 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>Castle of Doom</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
+
+  <!-- Mobile controls overlay — shown only on touch devices via JS -->
+  <div id="m-ui">
+    <!-- Portrait mode: ask user to rotate -->
+    <div id="m-rotate">
+      <div class="m-rotate-icon">&#x27F3;</div>
+      <div>Bitte Gerät drehen&nbsp;— Landscape</div>
+    </div>
+
+    <!-- Left thumb: directional -->
+    <div id="m-left">
+      <div class="mbtn" id="mbtn-left">&#9664;</div>
+      <div class="mbtn" id="mbtn-right">&#9654;</div>
+    </div>
+
+    <!-- Right thumb: actions -->
+    <div id="m-right">
+      <div id="m-util">
+        <div class="mbtn mbtn-sm" id="mbtn-kiri">&#x1F43E;</div>
+        <div class="mbtn mbtn-sm" id="mbtn-potion">&#x2764;</div>
+      </div>
+      <div id="m-actions">
+        <div class="mbtn mbtn-jump" id="mbtn-jump">&#x2191;</div>
+        <div class="mbtn mbtn-attack" id="mbtn-attack">&#x2694;</div>
+      </div>
+    </div>
+  </div>
+
   <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
 
   <!-- Level data (loaded first — no dependencies) -->
@@ -46,5 +74,45 @@
 
   <!-- Entry point -->
   <script src="src/main.js"></script>
+
+  <!-- Mobile touch wiring (runs after VirtualControls is defined by MobileScene.js) -->
+  <script>
+  (function () {
+    if (!('ontouchstart' in window) && navigator.maxTouchPoints < 1) return;
+
+    // Show overlay on touch devices
+    document.getElementById('m-ui').classList.add('active');
+
+    function pressAction(action, down) {
+      var vc = window.VirtualControls;
+      if (!vc) return;
+      if (action === 'left')  { vc.left  = down; return; }
+      if (action === 'right') { vc.right = down; return; }
+      if (down) {
+        if (action === 'jump')   vc.jumpJustPressed   = true;
+        if (action === 'attack') vc.attackJustPressed = true;
+        if (action === 'potion') vc.potionJustPressed = true;
+        if (action === 'kiri')   vc.kiriJustPressed   = true;
+      }
+    }
+
+    [
+      ['mbtn-left',   'left'],
+      ['mbtn-right',  'right'],
+      ['mbtn-jump',   'jump'],
+      ['mbtn-attack', 'attack'],
+      ['mbtn-potion', 'potion'],
+      ['mbtn-kiri',   'kiri']
+    ].forEach(function (pair) {
+      var el     = document.getElementById(pair[0]);
+      var action = pair[1];
+      function dn(e) { e.preventDefault(); pressAction(action, true);  el.classList.add('mbtn-pressed'); }
+      function up(e) { e.preventDefault(); pressAction(action, false); el.classList.remove('mbtn-pressed'); }
+      el.addEventListener('touchstart',  dn, { passive: false });
+      el.addEventListener('touchend',    up, { passive: false });
+      el.addEventListener('touchcancel', up, { passive: false });
+    });
+  })();
+  </script>
 </body>
 </html>
