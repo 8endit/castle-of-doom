@@ -163,17 +163,16 @@ class Player extends Phaser.Physics.Arcade.Sprite {
     }
 
     startAttack() {
-        this.isAttacking  = true;
-        this.attackTimer  = this.attackDuration;
-        this.attackCooldown = 400;
-
         var mode = this.getWeaponMode();
         if (mode === 'bow' || mode === 'magic') {
-            // Ranged attack — no melee visual
+            // Ranged — only use cooldown; no melee hitbox
+            this.attackCooldown = 600;
             this._fireProjectile(mode);
-            this.attackCooldown = 600; // slightly longer cooldown for ranged
         } else {
             // Melee swing
+            this.isAttacking  = true;
+            this.attackTimer  = this.attackDuration;
+            this.attackCooldown = 400;
             this.setTexture('player_atk');
             this._trySound('sfx_attack');
         }

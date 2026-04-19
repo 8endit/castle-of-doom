@@ -110,7 +110,7 @@ class StoryScene extends Phaser.Scene {
 
         // Portrait
         if (isKiri) {
-            this._showPortrait('kiri', 'Kiri');
+            this._showPortrait('kiri_portrait', 'Kiri');
             // Shift text right to make room for portrait
             this.storyText.setPosition(
                 GAME_WIDTH / 2 + 30,
