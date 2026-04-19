@@ -103,10 +103,11 @@ class InventoryScene extends Phaser.Scene {
             var obj  = this._slotObjects[type];
             var item = slots[type];
             if (item) {
-                var rare = item.rarity === 'rare' ? '★ ' : '';
-                obj.nameText.setText(rare + item.type.charAt(0).toUpperCase() + item.type.slice(1))
+                var displayName = item.name || (item.type.charAt(0).toUpperCase() + item.type.slice(1));
+                obj.nameText.setText(displayName)
                     .setStyle({ fill: item.rarity === 'rare' ? '#ffcc44' : '#ccddff' });
                 var parts = [];
+                if (item.weaponType)           parts.push('[' + item.weaponType + ']');
                 if (item.stats.damage  > 0) { parts.push('+' + item.stats.damage  + ' ATK'); totalAtk += item.stats.damage; }
                 if (item.stats.defense > 0) { parts.push('+' + item.stats.defense + ' DEF'); totalDef += item.stats.defense; }
                 if (item.stats.hpBonus > 0) { parts.push('+' + item.stats.hpBonus + ' HP');  totalHp  += item.stats.hpBonus; }

@@ -376,8 +376,11 @@ class GameScene extends Phaser.Scene {
         this.scene.stop('UIScene');
         this.scene.stop('MobileScene');
         if (ld.nextLevel) {
+            // Show this level's storyAfter + next level's storyBefore as one sequence
+            var nextLd  = window[ld.nextLevel] || {};
+            var lines   = (ld.storyAfter || []).concat(nextLd.storyBefore || []);
             this.scene.start('StoryScene', {
-                lines: ld.storyAfter || [],
+                lines,
                 nextScene: 'GameScene',
                 nextData: { level: ld.nextLevel }
             });
