@@ -58,13 +58,15 @@ class UIScene extends Phaser.Scene {
         }).setOrigin(0.5, 0).setAlpha(0);
         this.toastTimer = 0;
 
-        // ── Room name ─────────────────────────────────────────────────────────
+        // ── Room name (updates on 'roomChanged' from GameScene) ───────────────
+        this.roomLabel = this.add.text(GAME_WIDTH - 12, 12, '', {
+            fontSize: '12px', fill: '#6688aa'
+        }).setOrigin(1, 0);
         var gs = this.scene.get('GameScene');
-        if (gs && gs.room) {
-            this.add.text(GAME_WIDTH - 12, 12, gs.room.title || '', {
-                fontSize: '12px', fill: '#6688aa'
-            }).setOrigin(1, 0);
-        }
+        if (gs && gs.room) this.roomLabel.setText(gs.room.title || '');
+        this.events.on('roomChanged', (title) => {
+            if (this.roomLabel) this.roomLabel.setText(title || '');
+        });
 
         // ── Damage flash overlay ──────────────────────────────────────────────
         this.dmgFlash = this.add.rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, 0xff0000, 0)

@@ -28,6 +28,9 @@ class GameScene extends Phaser.Scene {
         }
 
         this.cameras.main.setBackgroundColor(rd.bgColor || 0x1a1028);
+        // Reset any leftover fade effect from a previous transition
+        this.cameras.main.resetFX();
+        this.cameras.main.fadeIn(220, 0, 0, 0);
 
         var map = TileMap.build(this, rd.tileData);
         this.solidLayer    = map.solid;
@@ -125,6 +128,10 @@ class GameScene extends Phaser.Scene {
             this.events.emit('inventoryChanged', this.player.inventory.slots);
             this.events.emit('weaponModeChanged', this.player.getWeaponMode());
             this.scene.get('UIScene').events.emit('kiriHealReady');
+            this.scene.get('UIScene').events.emit('roomChanged', rd.title || this.roomId);
+            // Number of potions persists across rooms — re-sync HUD
+            var np = (this.player.potions && this.player.potions.length) || 0;
+            this.scene.get('UIScene').events.emit('potionsChanged', np);
         });
 
         if (!this.scene.isActive('UIScene'))     this.scene.launch('UIScene');
@@ -319,10 +326,11 @@ class GameScene extends Phaser.Scene {
         ProgressSystem.savePlayer(this.player);
         ProgressSystem.saveKiri(this.kiri);
         ProgressSystem.transition(targetRoom, via);
+        // Halt player motion so we don't slide into the opposite door instantly
+        if (this.player && this.player.body) this.player.body.setVelocity(0, 0);
         this.cameras.main.fadeOut(220, 0, 0, 0);
         this.cameras.main.once('camerafadeoutcomplete', () => {
-            this.scene.stop('UIScene');
-            this.scene.stop('MobileScene');
+            // Keep UIScene/MobileScene running — GameScene restart re-emits state
             this.scene.restart();
         });
     }
