@@ -1,70 +1,87 @@
+// GameScene — room-based Castlevania-style exploration.
+// One room is loaded at a time; door zones on left/right edges transition
+// to adjacent rooms while persisting player state via ProgressSystem.
 class GameScene extends Phaser.Scene {
     constructor() { super({ key: 'GameScene' }); }
 
     init(data) {
-        this.levelKey  = (data && data.level) || 'LEVEL_1';
-        this.levelData = window[this.levelKey] || LEVEL_1;
-        this.bossDefeated = false;
-        this.exitOpen     = false;
-        if (window.GameState.currentLevel !== this.levelKey) {
-            window.GameState.currentLevel = this.levelKey;
-            window.GameState.checkpoint   = null;
-        }
+        if (!window.GameState.progress) ProgressSystem.reset();
+        var p = window.GameState.progress;
+
+        if (data && data.room)              p.currentRoom = data.room;
+        if (data && data.fromExit !== undefined) p.fromExit = data.fromExit;
+        if (data && data.spawnX !== undefined)   p.spawnX   = data.spawnX;
+        if (data && data.spawnY !== undefined)   p.spawnY   = data.spawnY;
+
+        this.roomId         = p.currentRoom;
+        this.room           = WorldData.get(this.roomId);
+        this.bossDefeated   = false;
+        this._transitioning = false;
     }
 
     create() {
-        var ld = this.levelData;
+        var rd = this.room;
+        if (!rd) {
+            // Fallback to start room if someone references a missing room
+            this.roomId = WorldData.startRoom;
+            rd = this.room = WorldData.get(this.roomId);
+        }
 
-        this.cameras.main.setBackgroundColor(ld.bgColor || 0x1a1028);
+        this.cameras.main.setBackgroundColor(rd.bgColor || 0x1a1028);
 
-        var map = TileMap.build(this, ld.tileData);
+        var map = TileMap.build(this, rd.tileData);
         this.solidLayer    = map.solid;
         this.platformLayer = map.platforms;
 
-        var W = TileMap.pixelWidth(ld.tileData);
-        var H = TileMap.pixelHeight(ld.tileData);
-
+        var W = TileMap.pixelWidth(rd.tileData);
+        var H = TileMap.pixelHeight(rd.tileData);
         this.physics.world.setBounds(0, 0, W, H + 200);
         this.cameras.main.setBounds(0, 0, W, H);
 
-        // Player
-        var spawnX = window.GameState.checkpoint ? window.GameState.checkpoint.x : ld.playerStart.x;
-        var spawnY = window.GameState.checkpoint ? window.GameState.checkpoint.y : ld.playerStart.y;
+        // ── Spawn position ────────────────────────────────────────────────
+        var progress = window.GameState.progress;
+        var spawnX, spawnY, facing = null;
+        if (progress.spawnX !== null && progress.spawnY !== null) {
+            spawnX = progress.spawnX;
+            spawnY = progress.spawnY;
+        } else if (progress.fromExit === 'left') {
+            spawnX = ROOM_SPAWN.left.x;  spawnY = ROOM_SPAWN.left.y;
+            facing = 'right';
+        } else if (progress.fromExit === 'right') {
+            spawnX = ROOM_SPAWN.right.x; spawnY = ROOM_SPAWN.right.y;
+            facing = 'left';
+        } else {
+            spawnX = rd.playerStart.x;   spawnY = rd.playerStart.y;
+        }
+
+        // ── Player + Kiri ─────────────────────────────────────────────────
         this.player = new Player(this, spawnX, spawnY);
         this.player.inventory = new Inventory(this.player);
+        ProgressSystem.restorePlayer(this.player);
+        if (facing === 'right') this.player.setFlipX(false);
+        if (facing === 'left')  this.player.setFlipX(true);
         this.cameras.main.startFollow(this.player, true, 0.1, 0.1);
 
-        // Kiri companion
-        this.kiri = new KiriCompanion(this, spawnX - 40, spawnY - 20);
+        this.kiri = new KiriCompanion(this, spawnX - 28, spawnY - 20);
+        ProgressSystem.restoreKiri(this.kiri);
         this.player.kiri = this.kiri;
 
-        // (level greetings are handled in StoryScene before entering)
-
-        // Enemy group
+        // ── Enemies, loot, boss, hazards, doors, save ─────────────────────
         this.enemies   = this.physics.add.group({ runChildUpdate: true });
         this.lootItems = this.physics.add.group();
 
         this._inactiveEnemies = [];
-        (ld.enemies || []).forEach(cfg => this._spawnEnemy(cfg));
+        (rd.enemies || []).forEach(cfg => this._spawnEnemy(cfg));
 
         this.boss = null;
-        if (ld.boss) this._spawnBoss(ld.boss);
+        if (rd.boss) this._spawnBoss(rd.boss);
 
-        this._spawnCheckpoints(ld.checkpoints || []);
-        this._spawnSpikes(ld.spikes || []);
-        this._spawnMovingPlatforms(ld.movingPlatforms || []);
+        this._spawnSpikes(rd.spikes || []);
+        this._spawnMovingPlatforms(rd.movingPlatforms || []);
+        this._spawnDoors(rd.exits || {}, W);
+        if (rd.savePoint) this._spawnSavePoint(rd.savePoint);
 
-        // Exit portal
-        this.exitPortal = this.add.sprite(ld.exitX, ld.playerStart.y - 8, 'exit_portal');
-        this.exitPortal.setDepth(2);
-        this.physics.add.existing(this.exitPortal, true);
-        if (ld.boss) {
-            this.exitPortal.setAlpha(0);
-        } else {
-            this.exitOpen = true;
-        }
-
-        // ── Colliders ──────────────────────────────────────────────────────
+        // ── Colliders ─────────────────────────────────────────────────────
         this.physics.add.collider(this.player, this.solidLayer);
         this.physics.add.collider(this.player, this.platformLayer, null, this._platCheck, this);
         this.physics.add.collider(this.enemies, this.solidLayer);
@@ -72,9 +89,7 @@ class GameScene extends Phaser.Scene {
         this.physics.add.collider(this.lootItems, this.platformLayer, null, this._platCheck, this);
 
         this.physics.add.overlap(this.player, this.lootItems, this._pickupLoot, null, this);
-        this.physics.add.overlap(this.player, this.exitPortal, this._enterExit, null, this);
 
-        // Player projectiles vs enemies
         this.physics.add.overlap(this.player._projectiles, this.enemies,
             (proj, enemy) => {
                 if (!proj.active || !enemy.active || enemy.state === 'dead') return;
@@ -84,7 +99,7 @@ class GameScene extends Phaser.Scene {
             }
         );
 
-        // Events
+        // ── Events → UI bridge ────────────────────────────────────────────
         this.events.on('bossDied', this._onBossDied, this);
         this.events.on('bossSpawned', (maxHp) => {
             this.scene.get('UIScene').events.emit('bossSpawned', maxHp);
@@ -109,7 +124,6 @@ class GameScene extends Phaser.Scene {
             this.events.emit('playerDamaged', this.player.stats.hp, this.player.stats.maxHp);
             this.events.emit('inventoryChanged', this.player.inventory.slots);
             this.events.emit('weaponModeChanged', this.player.getWeaponMode());
-            this.events.emit('kiriHealReady');
             this.scene.get('UIScene').events.emit('kiriHealReady');
         });
 
@@ -117,14 +131,32 @@ class GameScene extends Phaser.Scene {
         if (!this.scene.isActive('MobileScene')) this.scene.launch('MobileScene');
 
         // Pause
-        this._pauseKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.P);
-        this._escKey   = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ESC);
         this.input.keyboard.on('keydown-P',   () => this._togglePause());
         this.input.keyboard.on('keydown-ESC', () => this._togglePause());
 
         this._buildBackground(W, H);
 
-        if (!window._hintShown) {
+        // ── First-visit story + room title ────────────────────────────────
+        var firstVisit = ProgressSystem.isFirstVisit(this.roomId);
+        ProgressSystem.markVisited(this.roomId);
+
+        // Clear transition spawn hints so death-respawn/reload picks up cleanly
+        progress.fromExit = null;
+        progress.spawnX   = null;
+        progress.spawnY   = null;
+
+        if (firstVisit && rd.storyBefore && rd.storyBefore.length > 0 && this.kiri) {
+            // Show the first Kiri line as a speech bubble (avoids full cutscene mid-run)
+            var line = rd.storyBefore[0];
+            if (line.indexOf('[KIRI]') === 0) line = line.replace(/^\[KIRI\]\s*"?/, '').replace(/"$/, '');
+            this.time.delayedCall(900, () => {
+                if (this.kiri && this.kiri.active) this.kiri.say(line, 3500);
+            });
+        }
+        this._showRoomTitle(rd.title || this.roomId);
+
+        // Controls hint (first room only, once per page load)
+        if (!window._hintShown && this.roomId === WorldData.startRoom) {
             window._hintShown = true;
             var hint = this.add.text(GAME_WIDTH / 2, 30,
                 '← → Move   ↑ Jump   Z Attack   H Kiri-Heal', {
@@ -137,15 +169,14 @@ class GameScene extends Phaser.Scene {
 
     update(time, delta) {
         if (!this.player.active) return;
+        if (this._transitioning)  return;
 
         this.player.update(time, delta);
 
-        // Kiri follows player
         if (this.kiri && this.kiri.active) {
             this.kiri.follow(this.player, delta);
         }
 
-        // Moving platforms
         this._updateMovingPlatforms(delta);
 
         // Proximity enemy activation
@@ -168,10 +199,6 @@ class GameScene extends Phaser.Scene {
         if (this.boss && this.boss.active) {
             this.boss.player = this.player;
             this._checkBossProjectiles();
-        }
-
-        // Player projectiles vs boss
-        if (this.boss && this.boss.active) {
             this.player._projectiles.getChildren().forEach(proj => {
                 if (!proj.active || !this.boss.active) return;
                 if (Phaser.Math.Distance.Between(proj.x, proj.y, this.boss.x, this.boss.y) < 32) {
@@ -204,7 +231,10 @@ class GameScene extends Phaser.Scene {
             }
         });
 
-        // Reset one-frame virtual control pulses AFTER all game logic has read them
+        // Door transitions
+        this._checkDoorTransitions();
+
+        // Reset one-frame virtual control pulses
         if (window.VirtualControls) {
             window.VirtualControls.jumpJustPressed   = false;
             window.VirtualControls.attackJustPressed = false;
@@ -232,59 +262,104 @@ class GameScene extends Phaser.Scene {
         });
     }
 
-    _scheduleKiriGreeting() {
-        var greetings = {
-            LEVEL_1: null, // already covered in storyBefore
-            LEVEL_2: '[KIRI] ...Diese Finsternis kenne ich. Pass auf Fallgruben auf.',
-            LEVEL_3: '[KIRI] Das ist das Innere Heiligtum. Ich kann die Flamme fuehlen...'
-        };
-        var msg = greetings[this.levelKey];
-        if (msg && this.kiri) {
-            this.time.delayedCall(1500, () => {
-                if (this.kiri && this.kiri.active) {
-                    this.kiri.say(msg.replace('[KIRI] ', ''), 3500);
-                }
-            });
+    // ── Doors ──────────────────────────────────────────────────────────────
+    _spawnDoors(exits, roomWidth) {
+        this.doorZones = [];
+        if (exits.left) {
+            this._makeDoor(16, 320, exits.left.room, 'right');
+        }
+        if (exits.right) {
+            this._makeDoor(roomWidth - 16, 320, exits.right.room, 'left');
         }
     }
 
-    _spawnCheckpoints(checkpoints) {
-        this._checkpointZones = [];
-        checkpoints.forEach(cp => {
-            if (window.GameState.checkpoint && cp.x <= window.GameState.checkpoint.x) return;
+    _makeDoor(x, y, targetRoom, incomingSide) {
+        var door = this.add.image(x, y, 'door').setDepth(2);
+        var zone = this.add.zone(x, y, 24, 60).setOrigin(0.5);
+        this.physics.add.existing(zone, true);
+        zone._target = targetRoom;
+        zone._via    = incomingSide;
+        zone._door   = door;
 
-            var marker = this.add.text(cp.x, cp.y - 24, '🔥', { fontSize: '20px' })
-                .setOrigin(0.5).setDepth(3);
-            this.tweens.add({
-                targets: marker,
-                scaleX: { from: 0.9, to: 1.1 }, scaleY: { from: 0.9, to: 1.1 },
-                duration: 800, yoyo: true, repeat: -1
-            });
+        // Boss-lock hint
+        if (this.room.lockLeftDoorDuringBoss && incomingSide === 'right' && !this.bossDefeated) {
+            door.setTint(0x661111);
+        }
 
-            var zone = this.add.zone(cp.x, cp.y, 40, 64).setOrigin(0.5);
-            this.physics.add.existing(zone, true);
-            this.physics.add.overlap(this.player, zone, () => {
-                if (window.GameState.checkpoint && window.GameState.checkpoint.x >= cp.x) return;
-                window.GameState.checkpoint = { x: cp.x, y: cp.y };
-                // Reset Kiri heal at checkpoint
-                if (this.kiri) this.kiri.resetForLevel();
-                this.scene.get('UIScene').events.emit('kiriHealReady');
-                marker.setText('✨');
-                var flash = this.add.text(cp.x, cp.y - 50, 'CHECKPOINT', {
-                    fontSize: '12px', fill: '#00ffcc',
-                    backgroundColor: '#00000088', padding: { x: 4, y: 2 }
-                }).setOrigin(0.5).setDepth(20);
-                this.tweens.add({
-                    targets: flash, alpha: 0, y: flash.y - 30, duration: 1500,
-                    onComplete: () => { if (flash.active) flash.destroy(); }
-                });
-                if (this.kiri) this.kiri.say('Ich bin wieder bei Kraefte!', 2000);
-            });
+        this.doorZones.push(zone);
+    }
 
-            this._checkpointZones.push({ zone, marker, cp });
+    _checkDoorTransitions() {
+        if (!this.doorZones || this._transitioning) return;
+        for (var i = 0; i < this.doorZones.length; i++) {
+            var z = this.doorZones[i];
+            if (Math.abs(this.player.x - z.x) < 14 && Math.abs(this.player.y - z.y) < 36) {
+                if (this.room.lockLeftDoorDuringBoss && !this.bossDefeated && z._via === 'right') {
+                    this._flashLockedDoor(z._door);
+                    continue;
+                }
+                this._transitionToRoom(z._target, z._via);
+                break;
+            }
+        }
+    }
+
+    _flashLockedDoor(door) {
+        if (door._flashing) return;
+        door._flashing = true;
+        this.tweens.add({
+            targets: door, alpha: { from: 1, to: 0.4 }, duration: 120, yoyo: true, repeat: 2,
+            onComplete: () => { door._flashing = false; door.setAlpha(1); }
         });
     }
 
+    _transitionToRoom(targetRoom, via) {
+        if (this._transitioning) return;
+        this._transitioning = true;
+        ProgressSystem.savePlayer(this.player);
+        ProgressSystem.saveKiri(this.kiri);
+        ProgressSystem.transition(targetRoom, via);
+        this.cameras.main.fadeOut(220, 0, 0, 0);
+        this.cameras.main.once('camerafadeoutcomplete', () => {
+            this.scene.stop('UIScene');
+            this.scene.stop('MobileScene');
+            this.scene.restart();
+        });
+    }
+
+    // ── Save Point ─────────────────────────────────────────────────────────
+    _spawnSavePoint(sp) {
+        var sprite = this.add.image(sp.x, sp.y, 'save_point').setDepth(2);
+        this.tweens.add({
+            targets: sprite, scaleX: { from: 1, to: 1.05 }, scaleY: { from: 1, to: 0.95 },
+            duration: 700, yoyo: true, repeat: -1
+        });
+        var zone = this.add.zone(sp.x, sp.y, 32, 40).setOrigin(0.5);
+        this.physics.add.existing(zone, true);
+        zone._used = false;
+        this.physics.add.overlap(this.player, zone, () => {
+            if (zone._used) return;
+            zone._used = true;
+            ProgressSystem.setSavePoint(this.roomId, sp.x, sp.y);
+            this.player.stats.hp = this.player.stats.maxHp;
+            this.scene.get('UIScene').events.emit('playerHP', this.player.stats.hp, this.player.stats.maxHp);
+            if (this.kiri) {
+                this.kiri.resetForLevel();
+                this.scene.get('UIScene').events.emit('kiriHealReady');
+                this.kiri.say('Hier ruhen wir. Kraft kehrt zurueck.', 2400);
+            }
+            var txt = this.add.text(sp.x, sp.y - 42, 'GESPEICHERT', {
+                fontSize: '12px', fill: '#ffcc00', fontStyle: 'bold',
+                backgroundColor: '#00000088', padding: { x: 5, y: 2 }
+            }).setOrigin(0.5).setDepth(20);
+            this.tweens.add({
+                targets: txt, alpha: 0, y: txt.y - 24, duration: 1800,
+                onComplete: () => { if (txt.active) txt.destroy(); }
+            });
+        });
+    }
+
+    // ── Hazards ────────────────────────────────────────────────────────────
     _spawnSpikes(spikes) {
         this.spikeGroup = this.physics.add.staticGroup();
         spikes.forEach(cfg => {
@@ -338,6 +413,7 @@ class GameScene extends Phaser.Scene {
         });
     }
 
+    // ── Enemies ────────────────────────────────────────────────────────────
     _spawnEnemy(cfg) {
         var enemy;
         if      (cfg.type === 'patrol') enemy = new EnemyPatrol(this, cfg.x, cfg.y, cfg);
@@ -369,15 +445,9 @@ class GameScene extends Phaser.Scene {
         this.boss.onDeath = (x, y, forced) => this._onEnemyDied(x, y, forced);
         this.physics.add.collider(this.boss, this.solidLayer);
 
-        var bossNames = {
-            LEVEL_1: 'TORWÄCHTER',
-            LEVEL_2: 'KATAKOMBEN-WÄCHTER',
-            LEVEL_3: 'HERR DES VERDERBENS'
-        };
-        var nameTag = this.add.text(cfg.x, cfg.y - 50,
-            bossNames[this.levelKey] || 'WÄCHTER', {
-                fontSize: '12px', fill: '#ff4444', fontStyle: 'bold'
-            }).setOrigin(0.5, 1).setDepth(6);
+        var nameTag = this.add.text(cfg.x, cfg.y - 50, 'HERR DES VERDERBENS', {
+            fontSize: '12px', fill: '#ff4444', fontStyle: 'bold'
+        }).setOrigin(0.5, 1).setDepth(6);
         this.bossNameTag = nameTag;
     }
 
@@ -399,26 +469,37 @@ class GameScene extends Phaser.Scene {
 
     _onBossDied() {
         this.bossDefeated = true;
-        this.exitOpen     = true;
         if (this.bossNameTag) this.bossNameTag.destroy();
+        // Unlock any door that was boss-gated
+        if (this.doorZones) {
+            this.doorZones.forEach(z => {
+                if (z._door && z._door.tintTopLeft !== 0xffffff) z._door.clearTint();
+            });
+        }
 
-        this.tweens.add({ targets: this.exitPortal, alpha: 1, duration: 800 });
-        this.tweens.add({
-            targets: this.exitPortal, scaleY: { from: 1, to: 1.1 },
-            duration: 500, yoyo: true, repeat: -1, delay: 800
-        });
-
-        var txt = this.add.text(GAME_WIDTH / 2, 80, 'BOSS DEFEATED! Reach the portal →', {
+        var txt = this.add.text(GAME_WIDTH / 2, 80, 'DIE FLAMME IST FREI!', {
             fontSize: '16px', fill: '#00ffcc', fontStyle: 'bold',
             backgroundColor: '#00000088', padding: { x: 10, y: 6 }
         }).setScrollFactor(0).setDepth(20);
-        this.time.delayedCall(4000, () => { if (txt.active) txt.destroy(); });
+        this.time.delayedCall(3200, () => { if (txt.active) txt.destroy(); });
 
         this.scene.get('UIScene').events.emit('bossDied');
+        if (this.kiri) this.kiri.say('Er faellt! Die Flamme ist frei!', 3000);
 
-        if (this.kiri) this.kiri.say('Er faellt! Zum Portal!', 3000);
+        // Head to WinScene after a brief pause
+        this.time.delayedCall(3600, () => {
+            ProgressSystem.savePlayer(this.player);
+            this.scene.stop('UIScene');
+            this.scene.stop('MobileScene');
+            this.scene.start('StoryScene', {
+                lines: this.room.storyAfter || [],
+                nextScene: 'WinScene',
+                nextData: {}
+            });
+        });
     }
 
+    // ── Loot ───────────────────────────────────────────────────────────────
     _pickupLoot(player, lootSprite) {
         if (!lootSprite.active || !lootSprite.itemData) return;
         var item = lootSprite.itemData;
@@ -446,34 +527,11 @@ class GameScene extends Phaser.Scene {
         }
 
         this.scene.get('UIScene').events.emit('itemPickup', LootSystem.label(item));
-        // Update weapon mode indicator
         this.events.emit('weaponModeChanged', player.getWeaponMode());
         try { this.sound.play('sfx_pickup'); } catch (e) {}
     }
 
-    _enterExit(player, portal) {
-        if (!this.exitOpen) return;
-        var ld = this.levelData;
-        this.scene.stop('UIScene');
-        this.scene.stop('MobileScene');
-        if (ld.nextLevel) {
-            // Show this level's storyAfter + next level's storyBefore as one sequence
-            var nextLd  = window[ld.nextLevel] || {};
-            var lines   = (ld.storyAfter || []).concat(nextLd.storyBefore || []);
-            this.scene.start('StoryScene', {
-                lines,
-                nextScene: 'GameScene',
-                nextData: { level: ld.nextLevel }
-            });
-        } else {
-            this.scene.start('StoryScene', {
-                lines: ld.storyAfter || [],
-                nextScene: 'WinScene',
-                nextData: {}
-            });
-        }
-    }
-
+    // ── Misc ───────────────────────────────────────────────────────────────
     _checkBossProjectiles() {
         if (!this.boss || !this.boss.projectiles) return;
         this.boss.projectiles.getChildren().forEach(proj => {
@@ -484,17 +542,34 @@ class GameScene extends Phaser.Scene {
         });
     }
 
+    _showRoomTitle(title) {
+        var txt = this.add.text(GAME_WIDTH / 2, 54, title, {
+            fontSize: '18px', fill: '#eeccaa', fontStyle: 'bold',
+            stroke: '#000000', strokeThickness: 4
+        }).setOrigin(0.5).setScrollFactor(0).setDepth(20).setAlpha(0);
+        this.tweens.add({
+            targets: txt, alpha: 1, duration: 350,
+            onComplete: () => {
+                this.time.delayedCall(1600, () => {
+                    this.tweens.add({
+                        targets: txt, alpha: 0, duration: 500,
+                        onComplete: () => { if (txt.active) txt.destroy(); }
+                    });
+                });
+            }
+        });
+    }
+
     _buildBackground(W, H) {
         var g = this.add.graphics().setScrollFactor(0.2).setDepth(0);
         g.fillStyle(0x0d0820, 0.5);
-        var towerPositions = [0.05, 0.2, 0.38, 0.55, 0.72, 0.88];
+        var towerPositions = [0.12, 0.35, 0.6, 0.85];
         towerPositions.forEach(frac => {
             var tx = frac * W;
-            var tw = 60;
-            var th = 200;
-            g.fillRect(tx, H - th - 20, tw, th);
-            for (var i = 0; i < 4; i++) {
-                g.fillRect(tx + i * 16, H - th - 36, 12, 20);
+            var tw = 48, th = 160;
+            g.fillRect(tx, H - th - 12, tw, th);
+            for (var i = 0; i < 3; i++) {
+                g.fillRect(tx + i * 16, H - th - 24, 12, 16);
             }
         });
     }

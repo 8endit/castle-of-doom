@@ -15,6 +15,8 @@ class BootScene extends Phaser.Scene {
         this._drawBoss();
         this._drawLoot();
         this._drawPortal();
+        this._drawDoor();
+        this._drawSavePoint();
         this.scene.start('MenuScene');
     }
 
@@ -646,6 +648,59 @@ class BootScene extends Phaser.Scene {
             g.fillRect(i, 5, 8, 2);
         }
         g.generateTexture('moving_plat', 80, 12);
+        g.destroy();
+    }
+
+    // ── Door (16×64) — wooden archway for room exits ──────────────────────
+    _drawDoor() {
+        var g = this.make.graphics({ x: 0, y: 0, add: false });
+        // Frame
+        g.fillStyle(0x2a1a08, 1);
+        g.fillRect(0, 0, 16, 64);
+        // Inner darkness
+        g.fillStyle(0x000000, 1);
+        g.fillRect(3, 4, 10, 56);
+        // Arched top highlight
+        g.fillStyle(0x5a3a1a, 1);
+        g.fillRect(2, 2, 12, 2);
+        // Metal studs
+        g.fillStyle(0x888888, 1);
+        g.fillRect(5, 14, 2, 2);
+        g.fillRect(9, 14, 2, 2);
+        g.fillRect(5, 44, 2, 2);
+        g.fillRect(9, 44, 2, 2);
+        // Glow
+        g.fillStyle(0xffaa33, 0.25);
+        g.fillRect(4, 10, 8, 44);
+        g.generateTexture('door', 16, 64);
+        g.destroy();
+    }
+
+    // ── Save Point (24×32) — campfire altar ─────────────────────────────────
+    _drawSavePoint() {
+        var g = this.make.graphics({ x: 0, y: 0, add: false });
+        // Stone base
+        g.fillStyle(0x3a3a44, 1);
+        g.fillRect(2, 22, 20, 10);
+        g.fillStyle(0x5a5a66, 1);
+        g.fillRect(2, 22, 20, 2);
+        // Logs
+        g.fillStyle(0x5a3a1a, 1);
+        g.fillRect(4, 18, 16, 4);
+        g.fillStyle(0x3a2510, 1);
+        g.fillRect(5, 19, 2, 2);
+        g.fillRect(11, 19, 2, 2);
+        g.fillRect(17, 19, 2, 2);
+        // Flame
+        g.fillStyle(0xff4400, 1);
+        g.fillTriangle(6, 18, 12, 2, 18, 18);
+        g.fillStyle(0xff8800, 1);
+        g.fillTriangle(8, 18, 12, 6, 16, 18);
+        g.fillStyle(0xffcc00, 1);
+        g.fillTriangle(10, 18, 12, 10, 14, 18);
+        g.fillStyle(0xffffff, 0.8);
+        g.fillRect(11, 14, 2, 3);
+        g.generateTexture('save_point', 24, 32);
         g.destroy();
     }
 
