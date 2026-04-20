@@ -112,11 +112,9 @@ class WinScene extends Phaser.Scene {
         window.GameState.deaths    = 0;
         window.GameState.startTime = Date.now();
         window._hintShown          = false;
-        ProgressSystem.reset();
+        RunState.init();
         this.cameras.main.fade(500, 0, 0, 0, false, function (cam, p) {
-            if (p === 1) {
-                this.scene.start('GameScene', { room: WorldData.startRoom });
-            }
+            if (p === 1) { this.scene.start('GameScene'); }
         }, this);
     }
 }

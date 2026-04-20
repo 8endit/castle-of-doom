@@ -333,7 +333,7 @@ class Player extends Phaser.Physics.Arcade.Sprite {
             scene.scene.get('UIScene').events.emit('livesChanged', window.GameState.lives);
             scene.scene.stop('UIScene');
             scene.scene.stop('MobileScene');
-            if (window.ProgressSystem) window.ProgressSystem.respawnAtSave();
+            if (window.RunState) window.RunState.respawnAtSave();
             scene.scene.start('GameScene');
         });
     }

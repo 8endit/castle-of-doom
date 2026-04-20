@@ -51,8 +51,8 @@ class GameOverScene extends Phaser.Scene {
 
         // ── Stats ─────────────────────────────────────────────────────────────
         var gs = window.GameState;
-        var roomId = (gs.progress && gs.progress.currentRoom) || 'R01';
-        var roomName = WorldData.title(roomId);
+        var roomId = (window.RUN && window.RUN.currentRoom) || 'R01';
+        var roomName = (ROOMS && ROOMS[roomId] && ROOMS[roomId].title) || roomId;
         var elapsed = gs.startTime ? Math.floor((Date.now() - gs.startTime) / 1000) : 0;
         var mm = Math.floor(elapsed / 60), ss = elapsed % 60;
         var timeStr = mm + ':' + (ss < 10 ? '0' : '') + ss;
@@ -106,11 +106,9 @@ class GameOverScene extends Phaser.Scene {
         window.GameState.lives     = 3;
         window.GameState.kills     = 0;
         window.GameState.startTime = Date.now();
-        ProgressSystem.reset();
+        RunState.init();
         this.cameras.main.fade(400, 0, 0, 0, false, function (cam, p) {
-            if (p === 1) {
-                this.scene.start('GameScene', { room: WorldData.startRoom });
-            }
+            if (p === 1) { this.scene.start('GameScene'); }
         }, this);
     }
 }

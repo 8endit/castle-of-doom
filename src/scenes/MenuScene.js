@@ -258,17 +258,10 @@ class MenuScene extends Phaser.Scene {
         window.GameState.deaths    = 0;
         window.GameState.startTime = Date.now();
         window._hintShown          = false;
-        ProgressSystem.reset();
-        var startRoom = WorldData.get(WorldData.startRoom);
-        // Mark R01 visited now so GameScene won't re-show the opening story
-        window.GameState.progress.visitedRooms[WorldData.startRoom] = true;
+        RunState.init();  // always a fresh run from the menu
         this.cameras.main.fade(500, 0, 0, 0, false, function (cam, p) {
             if (p === 1) {
-                this.scene.start('StoryScene', {
-                    lines: (startRoom && startRoom.storyBefore) || [],
-                    nextScene: 'GameScene',
-                    nextData: { room: WorldData.startRoom }
-                });
+                this.scene.start('GameScene');
             }
         }, this);
     }

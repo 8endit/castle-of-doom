@@ -2,16 +2,15 @@ var GAME_WIDTH  = 850;
 var GAME_HEIGHT = 390;
 var TILE_SIZE   = 32;
 
-// Global game state (lives + progress snapshot; ProgressSystem manages
-// rooms / savepoints / player snapshot on `progress`).
+// Global game state.  Run progression (rooms, save point, player snapshot)
+// lives on window.RUN and is managed by RunState.
 window.GameState = {
     lives: 3,
     kills: 0,
     deaths: 0,
-    startTime: 0,
-    progress: null
+    startTime: 0
 };
-if (window.ProgressSystem) ProgressSystem.reset();
+if (window.RunState) RunState.init();
 
 var game = new Phaser.Game({
     type: Phaser.AUTO,
