@@ -1,36 +1,29 @@
-// GameScene — room-based Castlevania-style exploration.
-// One room is loaded at a time; door zones on left/right edges transition
-// to adjacent rooms while persisting player state via ProgressSystem.
+// GameScene — loads one room, handles play + door transitions.
+//
+// Flow:
+//   create()   → build the room from ROOMS[currentRoom], spawn player at
+//                playerStart / SPAWN_FROM_LEFT / SPAWN_FROM_RIGHT, lock
+//                door triggers for _doorLockMs so we don't bounce back
+//                through the incoming door.
+//   update()   → normal gameplay, then _checkDoors() once lock expires.
+//   transition → RunState.snapshot + enterRoomVia, fade out, scene.restart.
 class GameScene extends Phaser.Scene {
     constructor() { super({ key: 'GameScene' }); }
 
-    init(data) {
-        if (!window.GameState.progress) ProgressSystem.reset();
-        var p = window.GameState.progress;
-
-        if (data && data.room)              p.currentRoom = data.room;
-        if (data && data.fromExit !== undefined) p.fromExit = data.fromExit;
-        if (data && data.spawnX !== undefined)   p.spawnX   = data.spawnX;
-        if (data && data.spawnY !== undefined)   p.spawnY   = data.spawnY;
-
-        this.roomId         = p.currentRoom;
-        this.room           = WorldData.get(this.roomId);
-        this.bossDefeated   = false;
+    init() {
+        if (!window.RUN) RunState.init();
+        this.roomId  = window.RUN.currentRoom;
+        this.room    = ROOMS[this.roomId] || ROOMS[START_ROOM];
         this._transitioning = false;
+        this._doorLockMs    = 600;   // ignore door zones this long after spawn
     }
 
     create() {
         var rd = this.room;
-        if (!rd) {
-            // Fallback to start room if someone references a missing room
-            this.roomId = WorldData.startRoom;
-            rd = this.room = WorldData.get(this.roomId);
-        }
 
-        this.cameras.main.setBackgroundColor(rd.bgColor || 0x1a1028);
-        // Reset any leftover fade effect from a previous transition
         this.cameras.main.resetFX();
-        this.cameras.main.fadeIn(220, 0, 0, 0);
+        this.cameras.main.setBackgroundColor(rd.bgColor);
+        this.cameras.main.fadeIn(260, 0, 0, 0);
 
         var map = TileMap.build(this, rd.tileData);
         this.solidLayer    = map.solid;
@@ -38,45 +31,37 @@ class GameScene extends Phaser.Scene {
 
         var W = TileMap.pixelWidth(rd.tileData);
         var H = TileMap.pixelHeight(rd.tileData);
-        this.physics.world.setBounds(0, 0, W, H + 200);
+        this.physics.world.setBounds(0, 0, W, H);
         this.cameras.main.setBounds(0, 0, W, H);
 
         // ── Spawn position ────────────────────────────────────────────────
-        var progress = window.GameState.progress;
-        var spawnX, spawnY, facing = null;
-        if (progress.spawnX !== null && progress.spawnY !== null) {
-            spawnX = progress.spawnX;
-            spawnY = progress.spawnY;
-        } else if (progress.fromExit === 'left') {
-            spawnX = ROOM_SPAWN.left.x;  spawnY = ROOM_SPAWN.left.y;
-            facing = 'right';
-        } else if (progress.fromExit === 'right') {
-            spawnX = ROOM_SPAWN.right.x; spawnY = ROOM_SPAWN.right.y;
-            facing = 'left';
-        } else {
-            spawnX = rd.playerStart.x;   spawnY = rd.playerStart.y;
-        }
+        var run = window.RUN;
+        var spawn;
+        if (run.spawnOverride)         spawn = run.spawnOverride;
+        else if (run.fromExit === 'left')   spawn = SPAWN_FROM_LEFT;
+        else if (run.fromExit === 'right')  spawn = SPAWN_FROM_RIGHT;
+        else                                spawn = rd.playerStart;
 
         // ── Player + Kiri ─────────────────────────────────────────────────
-        this.player = new Player(this, spawnX, spawnY);
+        this.player = new Player(this, spawn.x, spawn.y);
         this.player.inventory = new Inventory(this.player);
-        ProgressSystem.restorePlayer(this.player);
-        if (facing === 'right') this.player.setFlipX(false);
-        if (facing === 'left')  this.player.setFlipX(true);
+        RunState.applyToPlayer(this.player);
+        this.player.setFlipX(run.fromExit === 'right');
         this.cameras.main.startFollow(this.player, true, 0.1, 0.1);
 
-        this.kiri = new KiriCompanion(this, spawnX - 28, spawnY - 20);
-        ProgressSystem.restoreKiri(this.kiri);
+        this.kiri = new KiriCompanion(this, spawn.x - 28, spawn.y - 20);
+        RunState.applyToKiri(this.kiri);
         this.player.kiri = this.kiri;
 
-        // ── Enemies, loot, boss, hazards, doors, save ─────────────────────
+        // ── Room contents ─────────────────────────────────────────────────
         this.enemies   = this.physics.add.group({ runChildUpdate: true });
         this.lootItems = this.physics.add.group();
 
         this._inactiveEnemies = [];
         (rd.enemies || []).forEach(cfg => this._spawnEnemy(cfg));
 
-        this.boss = null;
+        this.boss         = null;
+        this.bossDefeated = false;
         if (rd.boss) this._spawnBoss(rd.boss);
 
         this._spawnSpikes(rd.spikes || []);
@@ -102,71 +87,45 @@ class GameScene extends Phaser.Scene {
             }
         );
 
-        // ── Events → UI bridge ────────────────────────────────────────────
-        this.events.on('bossDied', this._onBossDied, this);
-        this.events.on('bossSpawned', (maxHp) => {
-            this.scene.get('UIScene').events.emit('bossSpawned', maxHp);
-        });
-        this.events.on('bossHP', (hp, maxHp) => {
-            this.scene.get('UIScene').events.emit('bossHP', hp, maxHp);
-        });
-        this.events.on('playerDamaged', (hp, maxHp) => {
-            this.scene.get('UIScene').events.emit('playerHP', hp, maxHp);
-        });
-        this.events.on('inventoryChanged', (slots) => {
-            this.scene.get('UIScene').events.emit('inventoryChanged', slots);
-        });
-        this.events.on('weaponModeChanged', (mode) => {
-            this.scene.get('UIScene').events.emit('weaponModeChanged', mode);
-        });
-        this.events.on('kiriHealUsed', () => {
-            this.scene.get('UIScene').events.emit('kiriHealUsed');
-        });
+        // ── UI bridge ─────────────────────────────────────────────────────
+        this.events.on('bossDied',       this._onBossDied, this);
+        this.events.on('bossSpawned',    (m)   => this.scene.get('UIScene').events.emit('bossSpawned', m));
+        this.events.on('bossHP',         (h,m) => this.scene.get('UIScene').events.emit('bossHP', h, m));
+        this.events.on('playerDamaged',  (h,m) => this.scene.get('UIScene').events.emit('playerHP', h, m));
+        this.events.on('inventoryChanged', (s) => this.scene.get('UIScene').events.emit('inventoryChanged', s));
+        this.events.on('weaponModeChanged',(m) => this.scene.get('UIScene').events.emit('weaponModeChanged', m));
+        this.events.on('kiriHealUsed',         () => this.scene.get('UIScene').events.emit('kiriHealUsed'));
 
-        this.time.delayedCall(100, () => {
-            this.events.emit('playerDamaged', this.player.stats.hp, this.player.stats.maxHp);
+        // Push HUD state after UIScene has had a frame to initialize
+        this.time.delayedCall(80, () => {
+            var ui = this.scene.get('UIScene');
+            this.events.emit('playerDamaged',  this.player.stats.hp, this.player.stats.maxHp);
             this.events.emit('inventoryChanged', this.player.inventory.slots);
             this.events.emit('weaponModeChanged', this.player.getWeaponMode());
-            this.scene.get('UIScene').events.emit('kiriHealReady');
-            this.scene.get('UIScene').events.emit('roomChanged', rd.title || this.roomId);
-            // Number of potions persists across rooms — re-sync HUD
-            var np = (this.player.potions && this.player.potions.length) || 0;
-            this.scene.get('UIScene').events.emit('potionsChanged', np);
+            ui.events.emit('roomChanged',   rd.title || this.roomId);
+            ui.events.emit('potionsChanged', (this.player.potions && this.player.potions.length) || 0);
+            ui.events.emit('kiriHealReady');
         });
 
         if (!this.scene.isActive('UIScene'))     this.scene.launch('UIScene');
         if (!this.scene.isActive('MobileScene')) this.scene.launch('MobileScene');
 
-        // Pause
+        // Pause — keyboard + mobile button (see MobileScene)
         this.input.keyboard.on('keydown-P',   () => this._togglePause());
         this.input.keyboard.on('keydown-ESC', () => this._togglePause());
 
         this._buildBackground(W, H);
-
-        // ── First-visit story + room title ────────────────────────────────
-        var firstVisit = ProgressSystem.isFirstVisit(this.roomId);
-        ProgressSystem.markVisited(this.roomId);
-
-        // Clear transition spawn hints so death-respawn/reload picks up cleanly
-        progress.fromExit = null;
-        progress.spawnX   = null;
-        progress.spawnY   = null;
-
-        if (firstVisit && rd.storyBefore && rd.storyBefore.length > 0 && this.kiri) {
-            // Show the first Kiri line as a speech bubble (avoids full cutscene mid-run)
-            var line = rd.storyBefore[0];
-            if (line.indexOf('[KIRI]') === 0) line = line.replace(/^\[KIRI\]\s*"?/, '').replace(/"$/, '');
-            this.time.delayedCall(900, () => {
-                if (this.kiri && this.kiri.active) this.kiri.say(line, 3500);
-            });
-        }
         this._showRoomTitle(rd.title || this.roomId);
 
-        // Controls hint (first room only, once per page load)
-        if (!window._hintShown && this.roomId === WorldData.startRoom) {
+        // Fresh-run-only: clear transition hints after consumption
+        run.fromExit      = null;
+        run.spawnOverride = null;
+        window.RUN.visited[this.roomId] = true;
+
+        if (!window._hintShown && this.roomId === START_ROOM) {
             window._hintShown = true;
             var hint = this.add.text(GAME_WIDTH / 2, 30,
-                '← → Move   ↑ Jump   Z Attack   H Kiri-Heal', {
+                '← → Laufen   ↑ Sprung   Z Angriff   H Kiri-Heilung', {
                     fontSize: '12px', fill: '#aabbcc',
                     backgroundColor: '#00000066', padding: { x: 8, y: 4 }
                 }).setScrollFactor(0).setDepth(20);
@@ -174,22 +133,23 @@ class GameScene extends Phaser.Scene {
         }
     }
 
+    // ── Update loop ────────────────────────────────────────────────────────
     update(time, delta) {
-        if (!this.player.active) return;
-        if (this._transitioning)  return;
+        if (this._transitioning)          return;
+        if (!this.player || !this.player.active) return;
+
+        if (this._doorLockMs > 0) this._doorLockMs -= delta;
 
         this.player.update(time, delta);
 
-        if (this.kiri && this.kiri.active) {
-            this.kiri.follow(this.player, delta);
-        }
+        if (this.kiri && this.kiri.active) this.kiri.follow(this.player, delta);
 
         this._updateMovingPlatforms(delta);
 
         // Proximity enemy activation
-        if (this._inactiveEnemies && this._inactiveEnemies.length > 0) {
+        if (this._inactiveEnemies.length > 0) {
             this._inactiveEnemies = this._inactiveEnemies.filter(enemy => {
-                if (!enemy.active && Math.abs(enemy.x - this.player.x) < 550) {
+                if (!enemy.active && Math.abs(enemy.x - this.player.x) < 520) {
                     this._activateEnemy(enemy);
                     return false;
                 }
@@ -197,9 +157,7 @@ class GameScene extends Phaser.Scene {
             });
         }
 
-        this.enemies.getChildren().forEach(enemy => {
-            enemy.player = this.player;
-        });
+        this.enemies.getChildren().forEach(enemy => enemy.player = this.player);
 
         CombatSystem.resolvePlayerAttack(this.player, this.enemies);
 
@@ -238,117 +196,95 @@ class GameScene extends Phaser.Scene {
             }
         });
 
-        // Door transitions
-        this._checkDoorTransitions();
+        if (this._doorLockMs <= 0) this._checkDoors();
 
-        // Reset one-frame virtual control pulses
         if (window.VirtualControls) {
             window.VirtualControls.jumpJustPressed   = false;
             window.VirtualControls.attackJustPressed = false;
             window.VirtualControls.potionJustPressed = false;
             window.VirtualControls.kiriJustPressed   = false;
+            window.VirtualControls.pauseJustPressed  = false;
         }
     }
 
+    // ── Pause / Menu ───────────────────────────────────────────────────────
     _togglePause() {
+        if (this._transitioning) return;
         if (this.scene.isActive('PauseScene')) return;
         this.scene.pause();
         this.scene.launch('PauseScene', { from: 'GameScene' });
     }
 
-    _platCheck(player, plat) {
-        return player.body.velocity.y >= 0 && player.body.bottom <= plat.body.top + 12;
-    }
-
-    _projHitEffect(proj) {
-        var color = proj.attackType === 'magic' ? 0xcc44ff : 0xffcc00;
-        var spark = this.add.rectangle(proj.x, proj.y, 10, 10, color).setDepth(8);
-        this.tweens.add({
-            targets: spark, scaleX: 3, scaleY: 3, alpha: 0, duration: 200,
-            onComplete: () => { if (spark.active) spark.destroy(); }
-        });
-    }
+    // Called from MobileScene pause button
+    requestPause() { this._togglePause(); }
 
     // ── Doors ──────────────────────────────────────────────────────────────
     _spawnDoors(exits, roomWidth) {
-        this.doorZones = [];
+        this.doors = [];
         if (exits.left) {
-            this._makeDoor(16, 320, exits.left.room, 'right');
+            this._makeDoor(16, 320, exits.left, 'right');
         }
         if (exits.right) {
-            this._makeDoor(roomWidth - 16, 320, exits.right.room, 'left');
+            this._makeDoor(roomWidth - 16, 320, exits.right, 'left');
         }
     }
 
     _makeDoor(x, y, targetRoom, incomingSide) {
-        var door = this.add.image(x, y, 'door').setDepth(2);
-        var zone = this.add.zone(x, y, 24, 60).setOrigin(0.5);
-        this.physics.add.existing(zone, true);
-        zone._target = targetRoom;
-        zone._via    = incomingSide;
-        zone._door   = door;
-
-        // Boss-lock hint
-        if (this.room.lockLeftDoorDuringBoss && incomingSide === 'right' && !this.bossDefeated) {
-            door.setTint(0x661111);
-        }
-
-        this.doorZones.push(zone);
+        var sprite = this.add.image(x, y, 'door').setDepth(2);
+        var locked = this.room.lockExitsDuringBoss && !this.bossDefeated;
+        if (locked) sprite.setTint(0x661111);
+        this.doors.push({ x: x, y: y, targetRoom: targetRoom, incomingSide: incomingSide, sprite: sprite });
     }
 
-    _checkDoorTransitions() {
-        if (!this.doorZones || this._transitioning) return;
-        for (var i = 0; i < this.doorZones.length; i++) {
-            var z = this.doorZones[i];
-            if (Math.abs(this.player.x - z.x) < 14 && Math.abs(this.player.y - z.y) < 36) {
-                if (this.room.lockLeftDoorDuringBoss && !this.bossDefeated && z._via === 'right') {
-                    this._flashLockedDoor(z._door);
-                    continue;
+    _checkDoors() {
+        if (!this.doors || this._transitioning) return;
+        for (var i = 0; i < this.doors.length; i++) {
+            var d = this.doors[i];
+            if (Math.abs(this.player.x - d.x) < 14 && Math.abs(this.player.y - d.y) < 36) {
+                if (this.room.lockExitsDuringBoss && !this.bossDefeated) {
+                    this._flashDoor(d.sprite);
+                    return;
                 }
-                this._transitionToRoom(z._target, z._via);
-                break;
+                this._transitionToRoom(d.targetRoom, d.incomingSide);
+                return;
             }
         }
     }
 
-    _flashLockedDoor(door) {
-        if (door._flashing) return;
-        door._flashing = true;
+    _flashDoor(sprite) {
+        if (sprite._flashing) return;
+        sprite._flashing = true;
         this.tweens.add({
-            targets: door, alpha: { from: 1, to: 0.4 }, duration: 120, yoyo: true, repeat: 2,
-            onComplete: () => { door._flashing = false; door.setAlpha(1); }
+            targets: sprite, alpha: { from: 1, to: 0.3 }, duration: 120, yoyo: true, repeat: 2,
+            onComplete: () => { sprite._flashing = false; sprite.setAlpha(1); }
         });
     }
 
     _transitionToRoom(targetRoom, via) {
         if (this._transitioning) return;
         this._transitioning = true;
-        ProgressSystem.savePlayer(this.player);
-        ProgressSystem.saveKiri(this.kiri);
-        ProgressSystem.transition(targetRoom, via);
-        // Halt player motion so we don't slide into the opposite door instantly
         if (this.player && this.player.body) this.player.body.setVelocity(0, 0);
-        this.cameras.main.fadeOut(220, 0, 0, 0);
-        this.cameras.main.once('camerafadeoutcomplete', () => {
-            // Keep UIScene/MobileScene running — GameScene restart re-emits state
-            this.scene.restart();
-        });
+        RunState.snapshotPlayer(this.player);
+        RunState.snapshotKiri(this.kiri);
+        RunState.enterRoomVia(targetRoom, via);
+        this.cameras.main.fadeOut(240, 0, 0, 0);
+        this.cameras.main.once('camerafadeoutcomplete', () => { this.scene.restart(); });
     }
 
-    // ── Save Point ─────────────────────────────────────────────────────────
+    // ── Save point ─────────────────────────────────────────────────────────
     _spawnSavePoint(sp) {
         var sprite = this.add.image(sp.x, sp.y, 'save_point').setDepth(2);
         this.tweens.add({
             targets: sprite, scaleX: { from: 1, to: 1.05 }, scaleY: { from: 1, to: 0.95 },
             duration: 700, yoyo: true, repeat: -1
         });
-        var zone = this.add.zone(sp.x, sp.y, 32, 40).setOrigin(0.5);
+        var zone = this.add.zone(sp.x, sp.y, 36, 44).setOrigin(0.5);
         this.physics.add.existing(zone, true);
-        zone._used = false;
+        zone._triggered = false;
         this.physics.add.overlap(this.player, zone, () => {
-            if (zone._used) return;
-            zone._used = true;
-            ProgressSystem.setSavePoint(this.roomId, sp.x, sp.y);
+            if (zone._triggered) return;
+            zone._triggered = true;
+            RunState.setSave(this.roomId, sp.x, sp.y);
             this.player.stats.hp = this.player.stats.maxHp;
             this.scene.get('UIScene').events.emit('playerHP', this.player.stats.hp, this.player.stats.maxHp);
             if (this.kiri) {
@@ -356,7 +292,7 @@ class GameScene extends Phaser.Scene {
                 this.scene.get('UIScene').events.emit('kiriHealReady');
                 this.kiri.say('Hier ruhen wir. Kraft kehrt zurueck.', 2400);
             }
-            var txt = this.add.text(sp.x, sp.y - 42, 'GESPEICHERT', {
+            var txt = this.add.text(sp.x, sp.y - 44, 'GESPEICHERT', {
                 fontSize: '12px', fill: '#ffcc00', fontStyle: 'bold',
                 backgroundColor: '#00000088', padding: { x: 5, y: 2 }
             }).setOrigin(0.5).setDepth(20);
@@ -440,9 +376,7 @@ class GameScene extends Phaser.Scene {
         enemy.setActive(true).setVisible(true);
         enemy.body.enable = true;
         enemy.setScale(0);
-        this.tweens.add({
-            targets: enemy, scaleX: 1, scaleY: 1, duration: 300, ease: 'Back.Out'
-        });
+        this.tweens.add({ targets: enemy, scaleX: 1, scaleY: 1, duration: 300, ease: 'Back.Out' });
         enemy.setTint(0xffffff);
         this.time.delayedCall(200, () => { if (enemy.active) enemy.clearTint(); });
     }
@@ -453,10 +387,9 @@ class GameScene extends Phaser.Scene {
         this.boss.onDeath = (x, y, forced) => this._onEnemyDied(x, y, forced);
         this.physics.add.collider(this.boss, this.solidLayer);
 
-        var nameTag = this.add.text(cfg.x, cfg.y - 50, 'HERR DES VERDERBENS', {
+        this.bossNameTag = this.add.text(cfg.x, cfg.y - 50, 'HERR DES VERDERBENS', {
             fontSize: '12px', fill: '#ff4444', fontStyle: 'bold'
         }).setOrigin(0.5, 1).setDepth(6);
-        this.bossNameTag = nameTag;
     }
 
     _onEnemyDied(x, y, forced) {
@@ -478,36 +411,26 @@ class GameScene extends Phaser.Scene {
     _onBossDied() {
         this.bossDefeated = true;
         if (this.bossNameTag) this.bossNameTag.destroy();
-        // Unlock any door that was boss-gated
-        if (this.doorZones) {
-            this.doorZones.forEach(z => {
-                if (z._door && z._door.tintTopLeft !== 0xffffff) z._door.clearTint();
-            });
-        }
+        if (this.doors) this.doors.forEach(d => { if (d.sprite) d.sprite.clearTint(); });
 
         var txt = this.add.text(GAME_WIDTH / 2, 80, 'DIE FLAMME IST FREI!', {
             fontSize: '16px', fill: '#00ffcc', fontStyle: 'bold',
             backgroundColor: '#00000088', padding: { x: 10, y: 6 }
         }).setScrollFactor(0).setDepth(20);
-        this.time.delayedCall(3200, () => { if (txt.active) txt.destroy(); });
+        this.time.delayedCall(3000, () => { if (txt.active) txt.destroy(); });
 
         this.scene.get('UIScene').events.emit('bossDied');
         if (this.kiri) this.kiri.say('Er faellt! Die Flamme ist frei!', 3000);
 
-        // Head to WinScene after a brief pause
-        this.time.delayedCall(3600, () => {
-            ProgressSystem.savePlayer(this.player);
+        this.time.delayedCall(3400, () => {
+            RunState.snapshotPlayer(this.player);
             this.scene.stop('UIScene');
             this.scene.stop('MobileScene');
-            this.scene.start('StoryScene', {
-                lines: this.room.storyAfter || [],
-                nextScene: 'WinScene',
-                nextData: {}
-            });
+            this.scene.start('WinScene');
         });
     }
 
-    // ── Loot ───────────────────────────────────────────────────────────────
+    // ── Loot pickup ────────────────────────────────────────────────────────
     _pickupLoot(player, lootSprite) {
         if (!lootSprite.active || !lootSprite.itemData) return;
         var item = lootSprite.itemData;
@@ -518,7 +441,7 @@ class GameScene extends Phaser.Scene {
                 player.potions.push(item.healAmount);
                 lootSprite.destroy();
                 this.scene.get('UIScene').events.emit('potionsChanged', player.potions.length);
-                this.scene.get('UIScene').events.emit('itemPickup', '❤ Potion (+' + item.healAmount + ' HP)');
+                this.scene.get('UIScene').events.emit('itemPickup', '❤ Trank (+' + item.healAmount + ' HP)');
                 try { this.sound.play('sfx_pickup'); } catch (e) {}
             }
             return;
@@ -540,6 +463,19 @@ class GameScene extends Phaser.Scene {
     }
 
     // ── Misc ───────────────────────────────────────────────────────────────
+    _platCheck(player, plat) {
+        return player.body.velocity.y >= 0 && player.body.bottom <= plat.body.top + 12;
+    }
+
+    _projHitEffect(proj) {
+        var color = proj.attackType === 'magic' ? 0xcc44ff : 0xffcc00;
+        var spark = this.add.rectangle(proj.x, proj.y, 10, 10, color).setDepth(8);
+        this.tweens.add({
+            targets: spark, scaleX: 3, scaleY: 3, alpha: 0, duration: 200,
+            onComplete: () => { if (spark.active) spark.destroy(); }
+        });
+    }
+
     _checkBossProjectiles() {
         if (!this.boss || !this.boss.projectiles) return;
         this.boss.projectiles.getChildren().forEach(proj => {
@@ -569,16 +505,14 @@ class GameScene extends Phaser.Scene {
     }
 
     _buildBackground(W, H) {
-        var g = this.add.graphics().setScrollFactor(0.2).setDepth(0);
-        g.fillStyle(0x0d0820, 0.5);
-        var towerPositions = [0.12, 0.35, 0.6, 0.85];
-        towerPositions.forEach(frac => {
+        var g = this.add.graphics().setScrollFactor(0.3).setDepth(0);
+        g.fillStyle(0x0d0820, 0.55);
+        var towers = [0.15, 0.4, 0.65, 0.9];
+        towers.forEach(frac => {
             var tx = frac * W;
-            var tw = 48, th = 160;
-            g.fillRect(tx, H - th - 12, tw, th);
-            for (var i = 0; i < 3; i++) {
-                g.fillRect(tx + i * 16, H - th - 24, 12, 16);
-            }
+            var tw = 44, th = 150;
+            g.fillRect(tx, H - th - 16, tw, th);
+            for (var i = 0; i < 3; i++) g.fillRect(tx + i * 14, H - th - 28, 10, 14);
         });
     }
 }

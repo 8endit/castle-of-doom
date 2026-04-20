@@ -27,6 +27,11 @@
       <div>Bitte Gerät drehen&nbsp;— Landscape</div>
     </div>
 
+    <!-- Pause / menu button (top-left) -->
+    <div id="m-pause-wrap">
+      <div class="mbtn-pause" id="mbtn-pause">&#9776;</div>
+    </div>
+
     <!-- Left thumb: directional -->
     <div id="m-left">
       <div class="mbtn" id="mbtn-left">&#9664;</div>
@@ -48,18 +53,8 @@
 
   <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
 
-  <!-- World + room data (loaded first — WorldData defines makeRoomTiles helper) -->
-  <script src="src/rooms/WorldData.js"></script>
-  <script src="src/rooms/R01.js"></script>
-  <script src="src/rooms/R02.js"></script>
-  <script src="src/rooms/R03.js"></script>
-  <script src="src/rooms/R04.js"></script>
-  <script src="src/rooms/R05.js"></script>
-  <script src="src/rooms/R06.js"></script>
-  <script src="src/rooms/R07.js"></script>
-  <script src="src/rooms/R08.js"></script>
-  <script src="src/rooms/R09.js"></script>
-  <script src="src/rooms/R10.js"></script>
+  <!-- Room blueprints (self-contained, no other deps) -->
+  <script src="src/rooms/Rooms.js"></script>
 
   <!-- Utilities -->
   <script src="src/utils/TileMap.js"></script>
@@ -73,11 +68,11 @@
   <script src="src/entities/EnemyRanged.js"></script>
   <script src="src/entities/Boss.js"></script>
 
-  <!-- Systems (depend on Phaser + rooms) -->
+  <!-- Systems -->
   <script src="src/systems/LootSystem.js"></script>
   <script src="src/systems/Inventory.js"></script>
   <script src="src/systems/CombatSystem.js"></script>
-  <script src="src/systems/ProgressSystem.js"></script>
+  <script src="src/systems/RunState.js"></script>
 
   <!-- Scenes (depend on everything above) -->
   <script src="src/scenes/BootScene.js"></script>
@@ -124,6 +119,7 @@
         if (action === 'attack') vc.attackJustPressed = true;
         if (action === 'potion') vc.potionJustPressed = true;
         if (action === 'kiri')   vc.kiriJustPressed   = true;
+        if (action === 'pause')  vc.pauseJustPressed  = true;
       }
     }
 
@@ -133,7 +129,8 @@
       ['mbtn-jump',   'jump'],
       ['mbtn-attack', 'attack'],
       ['mbtn-potion', 'potion'],
-      ['mbtn-kiri',   'kiri']
+      ['mbtn-kiri',   'kiri'],
+      ['mbtn-pause',  'pause']
     ].forEach(function (pair) {
       var el     = document.getElementById(pair[0]);
       var action = pair[1];
